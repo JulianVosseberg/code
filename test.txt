@@ -1,0 +1,4 @@
+# working with emacs
+save: ctrl x + s
+quit command: ctrl g
+close: ctrl x + c
