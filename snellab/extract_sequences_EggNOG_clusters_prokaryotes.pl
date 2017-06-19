@@ -2,7 +2,7 @@
 use strict; 
 use warnings;
 
-## Original script by Jolien, updated for Pfam by Julian
+## Script by Jolien
 ## This script searches for the prokaryotic member sequences of the EggNOG (COG/ENOG) families that are within a cluster;
 ## As inputs, it uses the file containing the (numbered) clusters and the prokaryotic part of EggNOG containing all sequences and their memberships. 
 ## As output, it generates a tab separated file containing the cluster identifier followed by the identifiers of the EggNOG sequences, and a directory containing fasta-formatted files with the sequences

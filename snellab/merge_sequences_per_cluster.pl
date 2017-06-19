@@ -34,7 +34,7 @@ while(readdir PROK){
 closedir(PROK);
 
 
-opendir(EUK, $eukaryotes_dir) or die "Cannot open prokaryotic directory\n";
+opendir(EUK, $eukaryotes_dir) or die "Cannot open eukaryotic directory\n";
 while(readdir EUK){
 	my $file=$_;
 	if ($file=~ m/^C\d+/){
@@ -46,7 +46,7 @@ while(readdir EUK){
 closedir(EUK);
 
 
-opendir(ASG, $asgards_dir) or die "Cannot open prokaryotic directory\n";
+opendir(ASG, $asgards_dir) or die "Cannot open asgards directory\n";
 while(readdir ASG){
 	my $file=$_;
 	if ($file=~ m/^C\d+/){

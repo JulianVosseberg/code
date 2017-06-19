@@ -46,8 +46,8 @@ for line in tax_file: # Specific for the eukarya v4 species file
 tax_file.close()
 
 for filename in os.listdir(clusters_dir):
-    file_pattern = re.compile("^C[0-9]+\.fa")
-    if file_pattern.match(filename):
+    file_pattern = re.compile("[0-9]+\.fa$")
+    if file_pattern.search(filename):
         file_path = clusters_dir + "/" + filename
 	try:
             cluster_file = open(file_path)
@@ -61,11 +61,11 @@ for filename in os.listdir(clusters_dir):
                 euk_match = re.search(euk_pattern, line)
                 if euk_match:
                     euk_abbr = euk_match.group(0)[1:]
-                    if euk_abbr not in species_group.keys():
+                    if euk_abbr not in species_group:
                         print "%s not found" % euk_abbr
                     else:
                         supergroup = species_group[euk_abbr]
-                        if supergroup in supergroup_counter.keys():
+                        if supergroup in supergroup_counter:
                             supergroup_counter[supergroup] += 1
                         else:
                             supergroup_counter[supergroup] = 1
