@@ -10,7 +10,7 @@ optlist, args = getopt.getopt(sys.argv[1:], "d")
 domains = False
 if len(optlist) == 1:
     domains = True
-if len(args) % 2 != 0:
+if len(args) % 2 != 0 or len(args) == 0:
     usage(); sys.exit()
 
 pfams = []

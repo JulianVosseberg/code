@@ -3,38 +3,41 @@
 use strict;
 use warnings;
 
-# Written by Leny
+# Written by Leny; modified by Julian (determine first which species are present)
 # This script determines best blast hits for species versus species blast results and uses a species-supergroup list to determine at what level bbh's are determined.
 # The output is a list with bbh's.
 
 my $speciesSupergroupList = $ARGV[0];
-my $protein_type = $ARGV[1];
-my $supergroup_number = $ARGV[2];
+my $speciesList = $ARGV[1];
+my $protein_type = $ARGV[2];
 my $path = $ARGV[3];
 
-# List with species and their supergroup is parsed
+# Checks which species are present
+open FH, "<$speciesList" or
+    die "Cannot open $speciesList\n";
 
+chomp(my @speciesarray = <FH>);
+print "@speciesarray\n";
+   
+close FH;
+    
+# List with species and their supergroup is parsed
 open FH, "<$speciesSupergroupList" or 
    die "Cannot open $speciesSupergroupList\n";
-
-
-
-
-#for my $i (0 ..$#cmd){
-#      print $print[$i];
-#      shell_command($cmd[$i]);
-#    }
  
 my %SupergroupperSpecies;
 
-print "#This are the species and their supergroup in $speciesSupergroupList\n";
+#print "#This are the species and their supergroup in $speciesSupergroupList\n";
 while( my $line = <FH>){
       chomp($line);
       my @fields = split(/\t/, $line);
       my $species = $fields[0];
       my $supergroup = $fields [1];
-      print "$species\t$supergroup\n";
-      $SupergroupperSpecies{$species}=$supergroup;
+      #      print "$species\t$supergroup\n";
+      if ($species ~~ @speciesarray){
+	  $SupergroupperSpecies{$species}=$supergroup;
+	  print "$species found\n";
+      }
 }
       
 close FH;
@@ -55,8 +58,8 @@ open FH_OUT, ">$path/exact.hits" or die
 print "#These are best hits between supergroups\n";
 foreach my $species1 (keys %SupergroupperSpecies) {
    foreach my $species2 (keys %SupergroupperSpecies){ 
-      if ($SupergroupperSpecies{$species1} ne $SupergroupperSpecies{$species2}){
-         open FH, "<Blast.$protein_type.$species1.$species2.txt";
+       if ($SupergroupperSpecies{$species1} ne $SupergroupperSpecies{$species2}){
+         open FH, "<${protein_type}_euk_domains_numbered_$species1.$species2.blastp.txt";
          while( my $line = <FH> ){
             chomp $line;
             my @fields = split(/\t/, $line);
