@@ -40,5 +40,5 @@ for species in species_list:
 			supergroups_counter[supergroup] += 1
 
 for supergroup in supergroups_counter:
-	print supergroup, ":", supergroups_counter[supergroup]
+	print supergroup + ":",  supergroups_counter[supergroup]
 print "Total:", counter
