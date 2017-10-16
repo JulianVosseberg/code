@@ -4,16 +4,16 @@
 
 # State usage
 function usage() {
-    echo -e "Usage: \n\tdoStandardIQTREE.sh -a <alignment_file> [ -p <prefix> ] [ -m <MF+tree|MF|tree(provide model)> ] [ -t <nuclear|mitochondrial|chloroplast|viral> ] [ -f ]\n"
+    echo -e "Usage: \n\tdoStandardIQTREE.sh -a <alignment_file> [ -p <prefix> ] [ -m <MF+tree|MF|tree(provide model)> ] [ -t <nuclear|mitochondrial|chloroplast|viral> ] [ -c <threads> ] [ -f ]\n"
     echo "Performs ModelFinder and infers phylogeny using the chosen model."
-    echo "Default modes are MF+tree, no subtype and basename alignment file as prefix. Subtype only relevant for ModelFinder."
+    echo "Default modes are MF+tree, no subtype, auto option for best number of threads and basename alignment file as prefix. Subtype only relevant for ModelFinder."
     echo "If fast option is chosen (-f):"
     echo -e "\t*No advanced search for RHAS model is performed, including check for higher R values if best model is +R10 (both recommended in Kalyaanamorrthy et al. (2017))."
     echo -e "\t*Fast option for tree inference (~FastTree) is performed."
     exit
 }
 
-# If number or arguments is less than 2, invoke usage function
+# If number of arguments is less than 2, invoke usage function
 if [ "$#" -lt "2" ]; then
     usage
     exit
@@ -22,15 +22,17 @@ fi
 # Default mode and subtype
 mode="MF+tree"
 subtype=""
+threads="AUTO"
 fast=false
 
 # State options
-while getopts ":a:p:m:t:f" opt; do
+while getopts ":a:p:m:t:c:f" opt; do
     case $opt in
         a) aln=${OPTARG};;
         p) prefix=${OPTARG};;
         m) mode=${OPTARG};;
 	t) subtype=${OPTARG};;
+	c) threads=${OPTARG};;
         f) fast=true;;
         *) usage ;;
     esac
@@ -62,7 +64,7 @@ fi
 # Perform ModelFinder
 if $finder; then
     echo "Performing ModelFinder..."
-    iqtree -s $aln -m MF -pre ${prefix}_MF -nt AUTO $msub -quiet
+    iqtree -s $aln -m MF -pre ${prefix}_MF -nt $threads $msub -quiet
     model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF.iqtree | sed 's/Best-fit model according to BIC: //')
     if [ "$model" = "" ]; then
 	echo "Error: Best-fit model not detected"
@@ -72,7 +74,7 @@ if $finder; then
     if ! $fast; then
        echo "Performing advanced search for the optimal model of rate heterogeneity across sites..."
        se_model=${model%%+*}
-       iqtree -s $aln -pre ${prefix}_MF_$se_model -mset $se_model -nt AUTO -m MF -mtree -quiet
+       iqtree -s $aln -pre ${prefix}_MF_$se_model -mset $se_model -nt $threads -m MF -mtree -quiet
        model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_$se_model.iqtree | sed 's/Best-fit model according to BIC: //')
        if [ "$model" = "" ]; then
 	  echo "Error: Best-fit model not detected"; exit
@@ -81,7 +83,7 @@ if $finder; then
        if [[ "$model" = *"+R10" ]]; then
 	  se_model=${model%%+*}
 	  echo "Best-fit model includes the R10 model of RHAS, also checking $se_model models with higher R values..."
-	  iqtree -s $aln -pre ${prefix}_MF_${se_model}_R8-20 -mset $se_model -nt AUTO -m MF -mtree -cmin 8 -cmax 20 -quiet
+	  iqtree -s $aln -pre ${prefix}_MF_${se_model}_R8-20 -mset $se_model -nt $threads -m MF -mtree -cmin 8 -cmax 20 -quiet
 	  model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_${se_model}_R8-20.iqtree | sed 's/Best-fit model according to BIC: //')
 	  if [ "$model" = "" ]; then
 	    echo "Error: Best-fit model not detected"; exit
@@ -95,10 +97,10 @@ fi
 if $tree; then
     if $fast; then
 	echo "Inferring fast tree with $model model..."
-	iqtree -s $aln -m $model -pre $prefix -nt AUTO -alrt 1000 -quiet -fast
+	iqtree -s $aln -m $model -pre $prefix -nt $threads -alrt 1000 -quiet -fast
     else
 	echo "Inferring tree with $model model..."
-	iqtree -s $aln -m $model -pre $prefix -nt AUTO -alrt 1000 -bb 1000 -quiet
+	iqtree -s $aln -m $model -pre $prefix -nt $threads -alrt 1000 -bb 1000 -quiet
     fi
     echo "Done!"
 fi

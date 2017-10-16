@@ -21,7 +21,8 @@ seq = ""
 for line in fasta_file:
     line = line.rstrip()
     if line[0] == ">":
-        print seq[start:end]
+        if seq != "":
+            print seq[start:end]
         print line
         seq = ""
     else:
