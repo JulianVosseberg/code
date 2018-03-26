@@ -99,6 +99,15 @@ if $finder; then
 	    exit
 	fi
 	echo -e "Best-fit model is $model\n"
+    else
+	echo "Performing ModelFinder to search for the best-fit $se_model model..."
+	iqtree -s $aln -m MF -pre ${prefix}_MF -nt $threads -mset $se_model $madd -quiet
+	model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_$se_model.iqtree | sed 's/Best-fit model according to BIC: //')
+	if [ "$model" = "" ]; then
+	    echo "Error: Best-fit model not detected"
+	    exit
+	fi
+	echo -e "Best-fit model is $model\n"
     fi
     if ! $fast; then
        echo "Performing advanced search for the optimal model of rate heterogeneity across sites..."
@@ -123,15 +132,6 @@ if $finder; then
 	  fi
 	  echo -e "Best-fit model is $model\n"
        fi
-    fi
-    if $fast && $mset; then
-	echo "Performing fast search for the optimal $se_model model..."
-	iqtree -s $aln -pre ${prefix}_MF_$se_model -mset $se_model -nt $threads -m MF -quiet $madd
-	model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_$se_model.iqtree | sed 's/Best-fit model according to BIC: //')
-	if [ "$model" = "" ]; then
-	    echo "Error: Best-fit model not detected"; exit
-	fi
-	echo -e "Best-fit model is $model\n"
     fi
 fi
 
