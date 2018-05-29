@@ -40,6 +40,9 @@ for j,i in enumerate(xrange(0, len(args), 2)):
         output_file = open(pfam + "_" + str(j) + ".fa", "w")
         if pfam not in pfams:
             pfams.append(pfam)
+        to_combine = False
+        to_write = True
+        partial_hits = []
         for seq in line[1:]:
             seq_info = seq.split()
             seq_id = seq_info[0]
@@ -47,9 +50,38 @@ for j,i in enumerate(xrange(0, len(args), 2)):
                 print seq, "not found. Script aborted."; sys.exit()
             if domains:
                 coordinates = seq_info[1].split("..")
-                start = int(coordinates[0][1:])
+                if coordinates[0][0] == 'c':
+                    to_combine = True
+                    to_write = False
+                    start = int(coordinates[0][2:])
+                else:
+                    to_write = True
+                    start = int(coordinates[0][1:])
                 stop = int(coordinates[1][:-1])
-                output_file.write(">" + seq_id + "\n" + seqs[seq_id][start-1:stop] + "\n")
+                if to_combine:
+                    # Add partial hit to list
+                    if len(partial_hits) == 0:
+                        partial_hits.append([start, stop])
+                    else:
+                        pr_stop = partial_hits[-1][1]
+                        if start <= pr_stop:
+                            pr_start = partial_hits[-1][0]
+                            partial_hits[-1] = [pr_start, stop]
+                        else:
+                            partial_hits.append([start, stop])
+                if to_write:
+                    if to_combine:
+                        # Combine partial hits stored in list
+                        to_combine = False
+                        if len(partial_hits) == 1:
+                            output_file.write('>' + seq_id + '_deletion' + '\n' + seqs[seq_id][partial_hits[0][0] - 1 : partial_hits[0][1]] + '\n')
+                        else:
+                            output_file.write('>' + seq_id + '_insertion' + '\n')
+                            for hit in partial_hits:
+                                output_file.write(seqs[seq_id][hit[0] - 1 : hit[1]] + '\n')
+                        partial_hits = []
+                    else:
+                        output_file.write(">" + seq_id + "\n" + seqs[seq_id][start-1:stop] + "\n")
             else:
                 output_file.write(">" + seq_id + "\n" + seqs[seq_id] + "\n")
         output_file.close()

@@ -10,7 +10,7 @@ use List::MoreUtils qw(uniq);
 
 # State usage
 sub usage {
-   print STDERR "\nUsage:\n\tselect_bbhs.pl <supergroups.tsv> <species.list> <prefix> <outdir>\n";
+   print STDERR "\nUsage:\n\tselect_bbhs.pl <supergroups.tsv> <species.list> <prefix> <output file>\n";
    exit;
 }
 
@@ -23,14 +23,14 @@ if (scalar(@ARGV) != 4){
 my $speciesSupergroupList = $ARGV[0];
 my $speciesList = $ARGV[1];
 my $protein_type = $ARGV[2];
-my $path = $ARGV[3];
+my $bbhlist = $ARGV[3]; # output file
 
 # Checks which species are present
 open FH, "<$speciesList" or
     die "Cannot open $speciesList\n";
 
 chomp(my @speciesarray = <FH>);
-print "@speciesarray\n";
+#print "@speciesarray\n";
 
 close FH;
 
@@ -41,7 +41,7 @@ open FH, "<$speciesSupergroupList" or
 
 my %SupergroupperSpecies;
 
-print "#These are the species and their supergroup in $speciesSupergroupList\n";
+#print "#These are the species and their supergroup in $speciesSupergroupList\n";
 while( my $line = <FH>){
       chomp($line);
       my @fields = split(/\t/, $line);
@@ -50,46 +50,43 @@ while( my $line = <FH>){
 #     print "$species\t$supergroup\n";
       if ($species ~~ @speciesarray){
           $SupergroupperSpecies{$species}=$supergroup;
-          print "$species found\n";
+#          print "$species found\n";
       }
 }
      
 close FH;
-
 
 # Blastfiles are parsed, only the ones that are the result of a blast between two supergroups. BBHs between supergroups are collected in %besthit based on highest bitscore.
 # If bitscores are exactly the same multiple hits are collected. 
 
 my %besthit;
 
-print "\n#Best hits between supergroups are collected\n\n";
+print "#Best hits between supergroups are collected\n\n";
 print "Type\tQuery\tHit\tBitscore\tSupergroup_query\tSupergroup_hit\n";
-foreach my $species1 (keys %SupergroupperSpecies) {
-   foreach my $species2 (keys %SupergroupperSpecies){ 
-      if ($SupergroupperSpecies{$species1} ne $SupergroupperSpecies{$species2}){
-         open FH, "<${protein_type}_$species1.$species2.blastp.txt" or
-            die "Cannot open ${protein_type}_$species1.$species2.blastp.txt\n"; 
-         while( my $line = <FH> ){
-            chomp $line;
-            my @fields = split(/\t/, $line);
-            my $query = $fields[0];
-            my $hit = $fields[1];
-            my $bitscore = $fields[11];
-            if (not exists $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}){
-               $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}=[$bitscore,$hit];
-               print "Initial\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";
-            } elsif ($bitscore > $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}[0]) {
-               $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}=[$bitscore,$hit];
-               print "Replaced\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";
-            } elsif ($bitscore == $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}[0]) {
-               push(@{$besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}},$hit);
-               print "Expanded\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";                           
-               }
-         }  
-         close FH;
+open FH, "<${protein_type}_blastp.txt" or
+    die "Cannot open ${protein_type}_blastp.txt\n";
+while( my $line = <FH> ){
+    chomp $line;
+    my @fields = split(/\t/, $line);
+    my $query = $fields[0];
+    my $species1 = substr($query, 0, 4);
+    my $hit = $fields[1];
+    my $species2 = substr($hit, 0, 4);
+    if ($SupergroupperSpecies{$species1} ne $SupergroupperSpecies{$species2}){
+	my $bitscore = $fields[11];
+        if (not exists $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}){
+	    $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}=[$bitscore,$hit];
+            print "Initial\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";
+         } elsif ($bitscore > $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}[0]) {
+            $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}=[$bitscore,$hit];
+            print "Replaced\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";
+         } elsif ($bitscore == $besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}[0]) {
+            push(@{$besthit{$SupergroupperSpecies{$species1}}{$SupergroupperSpecies{$species2}}{$query}},$hit);
+            print "Expanded\t$query\t$hit\t$bitscore\t$SupergroupperSpecies{$species1}\t$SupergroupperSpecies{$species2}\n";                             
       }
    }  
-} 
+}
+close FH; 
 
 # Check if not all files were empty
 my $size = keys %besthit;
@@ -209,8 +206,8 @@ print "\nThe number of BBHs is $total\n";
 
 # BBH IDs are printed to file
 
-open FH_OUT, ">$path/bbhlist.txt" or
-  die "Cannot open bbhlist.txt";
+open FH_OUT, ">$bbhlist" or
+    die "Cannot open $bbhlist\n";
 
 foreach(@bbhs) {
    print FH_OUT "$_\n";

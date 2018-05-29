@@ -1,15 +1,20 @@
 #!/usr/bin/python
 
 import sys
+import getopt
+import re
 
 def usage():
-    print "Usage: number_multiple_domains.py <file.fa>"
-    sys.exit()
+    sys.exit("Usage: number_multiple_domains.py [ -d <delimiter> ] <file.fa>\n\nIf a delimiter is given, the part behind this in the header is ignored")
 
-if len(sys.argv) != 2:
-    usage(); sys.exit()
+optlist, args = getopt.getopt(sys.argv[1:], "d:")
+delim = ''
+if len(optlist) == 1:
+    delim = optlist[0][1]
+if len(args) != 1:
+   usage()
 
-fasta=sys.argv[1]
+fasta=args[0]
 
 try:
     fastafile = open(fasta)
@@ -23,6 +28,10 @@ for line in fastafile:
     if line.startswith(">"):
         line = line.rstrip()
         seqid = line[1:]
+        if delim != '':
+            m = re.search(delim, seqid) 
+            if m:
+                seqid = line[1 : m.start() + 1]
         if seqid not in seqids:
             seqids.append(seqid)
         else:
@@ -36,13 +45,20 @@ fastafile.seek(0)
 outputfile = open(fasta[:-3] + "_domains_numbered.fa", "w")
 for line in fastafile:
     if line.startswith(">"):
-        seqid = line.rstrip()[1:]
+        line = line.rstrip()
+        seqid = line[1:]
+        seqid_full = seqid
+        if delim != '':
+            m = re.search(delim, seqid) 
+            if m:
+                seqid = line[1 : m.start() + 1]
+                seqid_full = line[1:]
         if seqid in multiple_counts:
             number = multiple_counts[seqid] + 1
-            outputfile.write(">" + seqid + "_domain_" + str(number) + "\n")
+            outputfile.write(">" + seqid_full + "_domain_" + str(number) + "\n")
             multiple_counts[seqid] += 1
         else:
-            outputfile.write(line)
+            outputfile.write(line + '\n')
     else:
         outputfile.write(line)
 

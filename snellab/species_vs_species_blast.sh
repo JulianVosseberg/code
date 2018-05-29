@@ -36,7 +36,7 @@ done
 for species1 in $list; do
     for species2 in $list; do
 	if [ $species1 != $species2 ]; then
-	    ~/.local/blastp -query $outdir/${prefix}_$species1.fa -db $outdir/${prefix}_$species2.fa -max_target_seqs 1 -outfmt 6 -num_threads $cpus > $outdir/${prefix}_$species1.$species2.blastp.txt
+	    ~/.local/blastp -query $outdir/${prefix}_$species1.fa -db $outdir/${prefix}_$species2.fa -max_target_seqs 1 -outfmt 6 -num_threads $cpus >> $outdir/${prefix}_blastp.txt
 	fi
     done
 done
