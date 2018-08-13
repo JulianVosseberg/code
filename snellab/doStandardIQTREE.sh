@@ -119,13 +119,13 @@ if $finder; then
 	fi
 	echo -e "Best-fit model is $model\n"
     fi
-    if [[ "$threads" = "AUTO" ]]; then # Not each time auto detect again
-	threads=$(grep -m 1 THREADS ${prefix}_MF.log | sed 's/BEST NUMBER OF THREADS: //')
-	if [ "$threads" = "" ]; then
-	    echo "Error: best number of threads not detected"
-	    exit
-	fi
-    fi
+#    if [[ "$threads" = "AUTO" ]]; then # Not each time auto detect again
+#	threads=$(grep -m 1 THREADS ${prefix}_MF.log | sed 's/BEST NUMBER OF THREADS: //')
+#	if [ "$threads" = "" ]; then
+#	    echo "Error: best number of threads not detected"
+#	    exit
+#	fi
+#    fi
     if ! $fast; then
        if [[ "$model" = *"C"[1-6]"0" ]]; then
 	    if $advanced; then

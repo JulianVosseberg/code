@@ -10,7 +10,7 @@ use List::MoreUtils qw(uniq);
 
 # State usage
 sub usage {
-   print STDERR "\nUsage:\n\tselect_bbhs.pl <supergroups.tsv> <species.list> <prefix> <output file>\n";
+   print STDERR "\nUsage:\n\tselect_bbhs.pl <supergroups.tsv> <species.list> <prefix> <output bbh list>\n";
    exit;
 }
 
