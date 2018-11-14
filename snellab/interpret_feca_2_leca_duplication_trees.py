@@ -256,6 +256,8 @@ def infer_coverage_redundancy(node, representing):
 
 def duplication_check_unrooted(node, tree, tips, assigning, coverage_criterion = 0.15, duplication_criterion = 0.2, consistency = True):
     """Duplication check in euk only tree, see annotate_and_reroot_euk_only"""
+    if len(node.get_children()) > 2:
+        node.resolve_polytomy(recursive = False)
     leaves1, leaves2 = [child.get_leaves() for child in node.get_children()]
     leaves3 = tips - (set(leaves1) | set(leaves2))
     if not feca2leca(leaves1) or not feca2leca(leaves2) or not feca2leca(leaves3):
@@ -444,7 +446,15 @@ def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, dup
         R.add_child(child_node_root_detached)
         tree.set_outgroup("O")
         tree = R.detach()
-        R.add_features(identity = "duplication", name = "D" + str(dup_counter + 1))
+        R.add_features(identity = "duplication", name = "D" + str(dup_counter + 1), support = 101)
+        supports = [child.support for child in R.get_children()]
+        if supports[0] != supports[1]:
+            if supports[0] == 1.0:
+                R.get_children()[0].support = supports[1]
+            elif supports[1] == 1.0:
+                R.get_children()[1].support = supports[0]
+            else:
+                sys.exit('Error with duplicating support values at both sides of the root')
     else:
         ## Either no duplications or 1 duplication
         ## Try rooting on each internal node
@@ -492,6 +502,9 @@ def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, dup
 def annotate_overlap_all_assigned(feca, coverage_criterion = 0.15, duplication_criterion = 0.2, consistency = True):
     """Annotate eukaryotic nodes, including the represented sequences"""
     for node in feca.traverse('preorder'):
+        if not node.is_leaf():
+            if len(node.get_children()) > 2:
+                node.resolve_polytomy(recursive = False)
         coverage, copies, repr_species = infer_coverage_redundancy(node, representing)
         node.add_features(coverage = coverage, redundancy = copies, repr_species = repr_species, identity = '?')
     for node in feca.traverse('preorder'):
@@ -530,6 +543,15 @@ def annotate_overlap_all_assigned(feca, coverage_criterion = 0.15, duplication_c
     for postleca in feca.iter_search_nodes(identity = 'post-LECA'):
         if len(postleca.search_nodes(identity = 'LECA')) > 0:
             postleca.identity = 'unknown'
+    # Change rare unknown nodes that don't fulfill the duplication criterion but are duplications because there are duplications in both their children
+    for unknown in feca.iter_search_nodes(identity = "unknown"):
+        daughter1, daughter2 = unknown.get_children()
+        if len(daughter1.search_nodes(identity = 'duplication')) > 0 and len(daughter2.search_nodes(identity = 'duplication')) > 0:
+            unknown.identity = 'duplication'
+            species_overlap = set(daughter1.repr_species) & set(daughter2.repr_species)
+            all_species = set(daughter1.repr_species) | set(daughter2.repr_species)
+            dupl_consistency = len(species_overlap) / len(all_species)
+            unknown.add_features(overlap = len(species_overlap), consistency = dupl_consistency)
     return True
 
 def get_human_representing(seqs, human_seqs, human_represent, human_seq_info):
@@ -886,16 +908,16 @@ if not euk_only:
 if assigning:
     human_seqs = [seq for seq in all_seqs if 'HSAP' in seq]
     lecas_all_seqs_out = open(outdir_prefix + '_lecas_all_seqs.tsv', 'w')
-    print('Pfam\tLECA\tTree seqs\tRepresenting seqs', file = lecas_all_seqs_out)
-    print('Pfam\tFECA\tAncestry\tDuplication\tSpecies overlap\tDuplication consistency\tOGs\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
+    print('Pfam\tLECA\tSupport\tTree seqs\tRepresenting seqs', file = lecas_all_seqs_out)
+    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tSpecies overlap\tDuplication consistency\tOGs\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
     print('Pfam\tFECA\tAncestry\tLECA\tSupport\tCoverage\tCopy number\tHuman seqs\tHuman name\tSeqs', file = lecas_out)
-    print('Pfam\tFECA\tAncestry\tUnknowns\tCoverage\tHuman seqs\tHuman name\tSeqs', file = unknowns_out)
+    print('Pfam\tFECA\tAncestry\tUnknowns\tSupport\tCoverage\tHuman seqs\tHuman name\tSeqs', file = unknowns_out)
     if not euk_only:
         print('Pfam\tNon-FECA\tDonor taxon\tAncestry\tSupport\tCoverage\tSpecies\tSequence IDs\tRepresenting species', file = non_feca_out)
 else:
-    print('Pfam\tFECA\tAncestry\tDuplication\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
+    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tConsistency\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
     print('Pfam\tFECA\tAncestry\tLECA\tSupport\tSeqs', file = lecas_out)
-    print('Pfam\tFECA\tAncestry\tUnknowns\tSeqs', file = unknowns_out)
+    print('Pfam\tFECA\tAncestry\tUnknowns\tSupport\tSeqs', file = unknowns_out)
     if not euk_only:
         print('Pfam\tNon-FECA\tDonor taxon\tAncestry\tSupport\tSpecies\tSequence IDs', file = non_feca_out)
 
@@ -910,9 +932,13 @@ if euk_only:
     # Call duplications in unrooted mode and reroot tree
     tree = annotate_and_reroot_euk_only(tree, assigning, coverage_criterion, duplication_criterion, consistency)
     if assigning:
-        if not annotate_overlap_all_assigned(tree, coverage_criterion, duplication_criterion, consistency): # Annotate nodes and get relevant coverage and redundancy values
+        if not annotate_overlap_all_assigned(tree, coverage_criterion, duplication_criterion, consistency): # Annotate nodes (new duplications and LECAs may be found, because now only one consistency value is considered) and get relevant coverage and redundancy values
             sys.exit('No confident LECA in this tree: coverage = %f' % tree.coverage)
-    for leca in tree.iter_search_nodes(identity = 'LECA'):
+            # Actually, if there are new LECAs now, the position of the root should be recalculated, and then again, the duplications and LECAs should be inferred, and again...
+    for i, leca in enumerate(tree.iter_search_nodes(identity = 'LECA')):
+        leca_id = 'OG1.' + str(i+1)
+        leca.name = leca_id
+        leca.add_face(TextFace(leca_id, fgcolor = 'green'), column = 0, position = 'branch-top')
         seqs = [leaf.name for leaf in leca.iter_leaves()]
         if assigning:
             if 'HSAP' in leca.repr_species:
@@ -926,15 +952,21 @@ if euk_only:
             print(prefix, 'NA', 'Eukaryotic', leca.name, leca.support, ','.join(seqs), sep = '\t', file = lecas_out)
     # Calculate duplication lengths
     for i, duplication in enumerate(tree.iter_search_nodes(identity = 'duplication')):
+        dupl_id = 'D1.' + str(i+1)
+        duplication.name = dupl_id
+        duplication.add_face(TextFace(dupl_id, fgcolor = 'green'), column = 0, position = 'branch-top')
         dupl_lecas = duplication.search_nodes(identity = 'LECA')
         rdl, dl = calculate_median_duplication_length(tree, duplication, dupl_lecas) # Tree --> euk_clade
+        support = duplication.support
+        if support == 101.0:
+            support = 'NA'
         if assigning:
             children = duplication.get_children()
             ogs1 = [leca.name for leca in children[0].iter_search_nodes(identity = 'LECA')]
             ogs2 = [leca.name for leca in children[1].iter_search_nodes(identity = 'LECA')]
-            print(prefix, 'NA', 'Eukaryotic', duplication.name, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, sep = '\t', file = duplication_lengths_out)
+            print(prefix, 'NA', 'Eukaryotic', duplication.name, support, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, sep = '\t', file = duplication_lengths_out)
         else:
-            print(prefix, 'NA', 'Eukaryotic', duplication.name, rdl, dl, sep = '\t', file = duplication_lengths_out)
+            print(prefix, 'NA', 'Eukaryotic', duplication.name, support, rdl, dl, sep = '\t', file = duplication_lengths_out)
     for i, unknown in enumerate(tree.iter_search_nodes(identity = 'unknown')):
         unknown_id = 'U' + str(i+1)
         unknown.name = unknown_id
@@ -947,9 +979,9 @@ if euk_only:
                     human_seqs, unknown_human = get_human_representing(seqs, human_seqs, human_represent, human_seq_info) # Also update human seqs by removing ones represented by this unknown clade
                 else:
                     unknown_human = {}
-                print(prefix, 'NA', 'Eukaryotic',  unknown_id, str(child.coverage), ','.join(list(unknown_human.keys())), ','.join(list(unknown_human.values())), ','.join(seqs), sep = '\t', file = unknowns_out)
+                print(prefix, 'NA', 'Eukaryotic',  unknown_id, unknown.support, str(child.coverage), ','.join(list(unknown_human.keys())), ','.join(list(unknown_human.values())), ','.join(seqs), sep = '\t', file = unknowns_out)
             else:
-                print(prefix, 'NA', 'Eukaryotic', unknown_id, ','.join(seqs), sep = '\t', file = unknowns_out)
+                print(prefix, 'NA', 'Eukaryotic', unknown_id, unknown.support, ','.join(seqs), sep = '\t', file = unknowns_out)
 else: # prok + euk
     euk_clades = get_euk_clades(tree)
     feca_clades = []
@@ -1079,9 +1111,9 @@ else: # prok + euk
                 children = duplication.get_children()
                 ogs1 = [leca.name for leca in children[0].iter_search_nodes(identity = 'LECA')]
                 ogs2 = [leca.name for leca in children[1].iter_search_nodes(identity = 'LECA')]
-                print(prefix, feca_no, ancestry, dupl_id, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, sep = '\t', file = duplication_lengths_out)
+                print(prefix, feca_no, ancestry, dupl_id, duplication.support, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, sep = '\t', file = duplication_lengths_out)
             else:
-                print(prefix, feca_no, ancestry, dupl_id, rdl, dl, sep = '\t', file = duplication_lengths_out)
+                print(prefix, feca_no, ancestry, dupl_id, duplication.support, rdl, dl, sep = '\t', file = duplication_lengths_out)
         for i, unknown in enumerate(euk_clade.iter_search_nodes(identity = 'unknown')):
             unknown_id = 'U' + str(feca_count) + '.' + str(i+1)
             unknown.name = unknown_id
@@ -1095,9 +1127,9 @@ else: # prok + euk
                         human_seqs, unknown_human = get_human_representing(seqs, human_seqs, human_represent, human_seq_info) # Also updat human seqs by removing ones represented by this unknown clade
                     else:
                         unknown_human = {}
-                    print(prefix, feca_no, ancestry, unknown_id, str(child.coverage), ','.join(list(unknown_human.keys())), ','.join(list(unknown_human.values())), ','.join(seqs), sep = '\t', file = unknowns_out)
+                    print(prefix, feca_no, ancestry, unknown_id, unknown.support, str(child.coverage), ','.join(list(unknown_human.keys())), ','.join(list(unknown_human.values())), ','.join(seqs), sep = '\t', file = unknowns_out)
                 else:
-                    print(prefix, feca_no, ancestry, unknown_id, ','.join(seqs), sep = '\t', file = unknowns_out)
+                    print(prefix, feca_no, ancestry, unknown_id, unknown.support, ','.join(seqs), sep = '\t', file = unknowns_out)
     for count,euk_clade in enumerate(non_feca_clades):
         count += 1
         euk_clade.add_features(non_feca_no = count)

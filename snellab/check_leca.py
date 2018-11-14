@@ -103,9 +103,9 @@ else:
     print('Pfam\tFECA\tAncestry\tLECA\tSupport\tCoverage\tCopy number\tHuman seqs\tHuman name\tSeqs', file = lecas_out)
     if len(human_represent) > 0:
         human_seqs, leca_human = get_human_representing(bbh_seqs, human_seqs, human_represent, human_seq_info)
-        print(prefix, 'NA', 'Eukaryotic', 'OG1', 'NA', coverage, copy_no, ','.join(list(leca_human.keys())), ','.join(list(leca_human.values())), ','.join(bbh_seqs), sep = '\t', file = lecas_out)
+        print(prefix, 'NA', 'Eukaryotic', 'OG1.1', 'NA', coverage, copy_no, ','.join(list(leca_human.keys())), ','.join(list(leca_human.values())), ','.join(bbh_seqs), sep = '\t', file = lecas_out)
     else:
-        print(prefix, 'NA', 'Eukaryotic', 'OG1', 'NA', coverage, copy_no, '', '', ','.join(bbh_seqs), sep = '\t', file = lecas_out)
+        print(prefix, 'NA', 'Eukaryotic', 'OG1.1', 'NA', coverage, copy_no, '', '', ','.join(bbh_seqs), sep = '\t', file = lecas_out)
     lecas_out.close()
     print('Pfam\tFECAs (normal)\tFECAs (strict)\tFECAs (after merging)\tLECAs\tUnknowns\tNon-FECAs')
     print(prefix, 'NA', 'NA', 'NA', 1, 0, 'NA', sep = '\t')
