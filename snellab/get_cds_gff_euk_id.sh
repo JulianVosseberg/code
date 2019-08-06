@@ -32,6 +32,8 @@ for id in $ids; do
 	    pattern="$origid "
 	elif [[ $abbr = "PMIN" ]]; then
 	    pattern=${origid%-RA}-tr
+  elif [[ $abbr = "CFRA" ]]; then
+      pattern="$origid\";"
 	fi
 	zcat ~/julian2/snel-clan-genomes/eukarya/gff/$abbr.gff*.gz | grep $pattern | grep -w CDS | cut -f 1,3,4,5,7 | sed -r "s/^.+CDS/$id/" >> $output
     fi

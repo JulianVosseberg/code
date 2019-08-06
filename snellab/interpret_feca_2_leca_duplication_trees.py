@@ -5,7 +5,7 @@ from ete3 import PhyloTree
 from ete3 import NCBITaxa
 from ete3 import TreeStyle
 from ete3 import TextFace
-from numpy import median
+from numpy import median, mean
 from eukarya import *
 import re
 import sys
@@ -17,17 +17,22 @@ ts = TreeStyle()
 
 # Usage
 def usage():
-    print('\n\tUsage: interpret_feca_2_leca_duplication_trees.py -t <tree> [ -p <prefix> ] [ -o <output_dir> ] [ -e ] [ -f ] [ -i ] [ -r ] [ -d <(0.)#> ] [ -l <0.#> ] [ -h ]', file = sys.stderr)
-    print('\nThis script identifies FECA-2-LECA duplications, determines the best prokaryotic outgroup (if any), and performs a branch length analysis.', file = sys.stderr)
-    print('\nOptions:\n\t-t: tree file\n\t-p: prefix for output files (DEFAULT: basename tree file)\n\t-o: directory for output files (DEFAULT: current)\
-    \n\t-e: only eukaryotes (DEFAULT: off)\
-    \n\t-f: use only farthest leaf for rooting (DEFAULT: off)\
-    \n\t-i: filter interspersing prokaryotes (DEFAULT: off)\
-    \n\t-r: use information of which other sequences are represented by a ScrollSaw sequence\
-    \n\t-d: threshold for duplication consistency (float) or species overlap (integer) for duplications calling (DEFAULT: 0.2)\
-    \n\t-l: coverage threshold for LECA calling (DEFAULT: 0.15)\
-    \n\t-h: help', file = sys.stderr)
-    sys.exit()
+    sys.exit('''
+    Usage: interpret_feca_2_leca_duplication_trees.py -t <tree> [ -p <prefix> ] [ -o <output_dir> ] [ -e ] [ -f ] [ -i ] [ -r ] [ -d <(0.)#> ] [ -l <0.#> ] [ -m <mode> ] [ -h ]
+
+This script identifies FECA-2-LECA duplications, determines the best prokaryotic outgroup (if any), and performs a branch length analysis.
+Options:
+    -t: tree file
+    -p: prefix for output files (DEFAULT: basename tree file), also used for finding the BLAST file (see -r option)
+    -o: directory for output files (DEFAULT: current)
+    -e: only eukaryotes (DEFAULT: off)
+    -f: use only farthest leaf for rooting (DEFAULT: off)
+    -i: filter interspersing prokaryotes (DEFAULT: off)
+    -r: use information of which other sequences are represented by a ScrollSaw sequence
+    -d: threshold for duplication consistency (float) or species overlap (integer) for duplications calling (DEFAULT: 0.2)
+    -l: coverage threshold for LECA calling (DEFAULT: 0.15)
+    -m: mode for calculating the branch lengths in case of duplications (median (DEFAULT), minimum, maximum or mean)
+    -h: help\n''')
 
 def open_tree(tree_file_path):
     """Opens tree (contree or treefile) and assigns support values to nodes in case of a standard tree file"""
@@ -746,7 +751,7 @@ def reclassify_majority_sister(feca):
     else:
         return False
 
-def calculate_branch_lengths(tree, lecas, lepca, sister):
+def calculate_branch_lengths(tree, lecas, lepca, sister, mode = "median"):
     """Calculates the branch lengths for a single FECA"""
     prok_branch_lengths = []
     for prok in sister:
@@ -765,12 +770,16 @@ def calculate_branch_lengths(tree, lecas, lepca, sister):
         ebls.append(euk_bl_med)
         raw_stem_lengths.append(rsl)
         stem_lengths.append(sl)
-    rsl_med = median(raw_stem_lengths)
-    sl_med = median(stem_lengths)
-    ebls_med = median(ebls)
-    return prok_bl_med, rsl_med, sl_med, ebls_med
+    if mode == "median":
+        return prok_bl_med, median(raw_stem_lengths), median(stem_lengths), median(ebls)
+    elif mode == "minimum":
+        return prok_bl_med, min(raw_stem_lengths), min(stem_lengths), median(ebls)
+    elif mode == "maximum":
+        return prok_bl_med, max(raw_stem_lengths), max(stem_lengths), median(ebls)
+    elif mode == "mean":
+        return prok_bl_med, mean(raw_stem_lengths), mean(stem_lengths), median(ebls)
 
-def calculate_median_duplication_length(tree, duplication, lecas):
+def calculate_median_duplication_length(tree, duplication, lecas, mode = "median"):
     """Calculates the duplications lengths. Note: these can be inconsistent!"""
     raw_dupl_lengths = []
     dupl_lengths = []
@@ -783,9 +792,14 @@ def calculate_median_duplication_length(tree, duplication, lecas):
         raw_dupl_lengths.append(raw_dupl_length)
         dupl_length = raw_dupl_length / ebl_med
         dupl_lengths.append(dupl_length)
-    rdls_med = median(raw_dupl_lengths)
-    dls_med = median(dupl_lengths)
-    return rdls_med, dls_med
+    if mode == "median":
+        return median(raw_dupl_lengths), median(dupl_lengths)
+    elif mode == "minimum":
+        return min(raw_dupl_lengths), min(dupl_lengths)
+    elif mode == "maximum":
+        return max(raw_dupl_lengths), max(dupl_lengths)
+    elif mode == "mean":
+        return mean(raw_dupl_lengths), mean(dupl_lengths)
 
 def get_non_feca_sister(non_feca_node, tree): # In a rooted way (on farthest leaf)
     """Identifies the donor of the non-FECA clade"""
@@ -818,18 +832,18 @@ def get_non_feca_sister(non_feca_node, tree): # In a rooted way (on farthest lea
 #-----------------------------------------------------------------------------------------------------------------------------------------------
 
 # Parse arguments
-optlist, args = getopt.getopt(sys.argv[1:], 't:p:o:efirhd:l:')
+optlist, args = getopt.getopt(sys.argv[1:], 't:p:o:efirhd:l:m:')
 opts = {}
-euk_only = False; farthest = False; filtering = False; assigning = False; duplication_criterion = 0.2; consistency = True; coverage_criterion = 0.15 # Default values
+euk_only = False; farthest = False; filtering = False; assigning = False; duplication_criterion = 0.2; consistency = True; coverage_criterion = 0.15; mode = "median" # Default values
 if len(args) != 0:
-    print('Error: not all arguments recognised', file = sys.stderr); usage()
+    sys.stderr.write('Error: not all arguments recognised\n'); usage()
 for k, v in optlist:
     if k == '-h':
         usage()
     else:
         opts[k] = v
 if '-t' not in opts:
-    print('Error: specify a tree file (-t)', file = sys.stderr); usage()
+    sys.stderr.write('Error: specify a tree file (-t)\n'); usage()
 if '-p' in opts:
     prefix = opts['-p']
 else:
@@ -845,11 +859,11 @@ if '-e' in opts:
     euk_only = True
 if '-f' in opts:
     farthest = True
-    print('Warning: only farthest not fully implemented yet', file = sys.stderr)
+    sys.stderr.write('Warning: only farthest not fully implemented yet\n')
 if '-i' in opts:
     filtering=True
     if euk_only:
-        print('Error: filtering of prokaryotes not possible for eukaryote-only trees', file = sys.stderr); usage()
+        sys.stderr.write('Error: filtering of prokaryotes not possible for eukaryote-only trees\n'); usage()
 if '-r' in opts:
     assigning = True
 if '-d' in opts:
@@ -861,7 +875,11 @@ if '-d' in opts:
 if '-l' in opts:
     coverage_criterion = float(opts['-l'])
     if coverage_criterion > 1 or coverage_criterion < 0:
-        print('Error: coverage criterion should be between 0 and 1', file = sys.stderr); usage()
+        sys.stderr.write('Error: coverage criterion should be between 0 and 1\n'); usage()
+if '-m' in opts:
+    mode = opts['-m']
+    if mode not in ('median', 'minimum', 'maximum', 'mean'):
+        sys.stderr.write('Error: mode not recognised\n'); usage()
 
 # Open tree, get supergroups and annotate leaves
 tree = open_tree(opts['-t'])
@@ -903,19 +921,19 @@ if not euk_only:
     ancestry_out = open(outdir_prefix + '_ancestry.tsv', 'w')
     print('Pfam\tFECA\tFECA support\tLECAs\tUnknowns\tSister1 name\tSister1 support\tSister2 name\tSister2 support\tLCA sister\tAncestry\tSupport', file = ancestry_out)
     branch_lengths_out = open(outdir_prefix + '_branch_lengths.tsv', 'w')
-    print('Pfam\tFECA\tAncestry\tLECAs\tProkaryotic sister branch length (med)\tRaw stem lengths (med)\tStem lengths (med)\tEukaryotic branch lengths (med(med))', file = branch_lengths_out)
+    print('Pfam\tFECA\tAncestry\tLECAs\tProkaryotic sister branch length\tRaw stem lengths\tStem lengths\tEukaryotic branch lengths', file = branch_lengths_out)
     non_feca_out = open(outdir_prefix + '_non_feca.tsv', 'w')
 if assigning:
     human_seqs = [seq for seq in all_seqs if 'HSAP' in seq]
     lecas_all_seqs_out = open(outdir_prefix + '_lecas_all_seqs.tsv', 'w')
     print('Pfam\tLECA\tSupport\tTree seqs\tRepresenting seqs', file = lecas_all_seqs_out)
-    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tSpecies overlap\tDuplication consistency\tOGs\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
+    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tSpecies overlap\tDuplication consistency\tOGs\tRaw duplication lengths\tDuplication lengths', file = duplication_lengths_out)
     print('Pfam\tFECA\tAncestry\tLECA\tSupport\tCoverage\tCopy number\tHuman seqs\tHuman name\tSeqs', file = lecas_out)
     print('Pfam\tFECA\tAncestry\tUnknowns\tSupport\tCoverage\tHuman seqs\tHuman name\tSeqs', file = unknowns_out)
     if not euk_only:
         print('Pfam\tNon-FECA\tDonor taxon\tAncestry\tSupport\tCoverage\tSpecies\tSequence IDs\tRepresenting species', file = non_feca_out)
 else:
-    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tConsistency\tRaw duplication lengths (med)\tDuplication lengths (med)', file = duplication_lengths_out)
+    print('Pfam\tFECA\tAncestry\tDuplication\tSupport\tConsistency\tRaw duplication lengths\tDuplication lengths', file = duplication_lengths_out)
     print('Pfam\tFECA\tAncestry\tLECA\tSupport\tSeqs', file = lecas_out)
     print('Pfam\tFECA\tAncestry\tUnknowns\tSupport\tSeqs', file = unknowns_out)
     if not euk_only:
@@ -956,7 +974,7 @@ if euk_only:
         duplication.name = dupl_id
         duplication.add_face(TextFace(dupl_id, fgcolor = 'green'), column = 0, position = 'branch-top')
         dupl_lecas = duplication.search_nodes(identity = 'LECA')
-        rdl, dl = calculate_median_duplication_length(tree, duplication, dupl_lecas) # Tree --> euk_clade
+        rdl, dl = calculate_median_duplication_length(tree, duplication, dupl_lecas, mode = mode) # Tree --> euk_clade
         support = duplication.support
         if support == 101.0:
             support = 'NA'
@@ -1080,7 +1098,7 @@ else: # prok + euk
             bl_information[feca_no] = [ancestry, str(len(lecas))] + ['NA'] * 4
         else:
             lepca = feca_clade.up
-            psbl, rsl, sl, ebl = calculate_branch_lengths(tree_copy, lecas, lepca, sister)
+            psbl, rsl, sl, ebl = calculate_branch_lengths(tree_copy, lecas, lepca, sister, mode = mode)
             bl_information[feca_no] = [ancestry, str(len(lecas)), str(psbl), str(rsl), str(sl), str(ebl)]
 
         # Annotate LECAs
@@ -1103,7 +1121,7 @@ else: # prok + euk
         # Calculate duplication lengths
         for i, duplication in enumerate(euk_clade.iter_search_nodes(identity = 'duplication')): # What to do with unknowns?!
             dupl_lecas = duplication.search_nodes(identity = 'LECA')
-            rdl, dl = calculate_median_duplication_length(tree_copy, duplication, dupl_lecas) # Tree --> euk_clade
+            rdl, dl = calculate_median_duplication_length(tree_copy, duplication, dupl_lecas, mode = mode) # Tree --> euk_clade
             dupl_id = 'D' + str(feca_count) + '.' + str(i+1)
             duplication.name = dupl_id
             duplication.add_face(TextFace(dupl_id, fgcolor = 'green'), column = 0, position = 'branch-top')
