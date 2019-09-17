@@ -461,6 +461,58 @@ def annotate_overlap_all_assigned(feca, representing, supergroups5, coverage_cri
             unknown.add_features(overlap = len(species_overlap), consistency = dupl_consistency)
     return True
 
+def annotate_non_scrollsaw(feca, duplication_criterion = 0.2, consistency = True):
+    """Annotate eukaryotic nodes for non-ScrollSaw trees"""
+    for node in feca.traverse('preorder'):
+        if not node.is_leaf():
+            if len(node.get_children()) > 2:
+                node.resolve_polytomy(recursive = False)
+        node.add_features(identity = '?')
+    for node in feca.traverse('preorder'):
+        if node.is_leaf():
+            continue
+        leaves = node.get_leaves()
+        if not feca2leca(leaves):
+            continue
+        daughters = node.get_children()
+        if duplication_check(daughters[0].get_leaves(), daughters[1].get_leaves()):
+            daughter1_sp = set([leaf.taxid for leaf in daughters[0]])
+            daughter2_sp = set([leaf.taxid for leaf in daughters[1]])
+            species_overlap = daughter1_sp & daughter2_sp
+            all_species = daughter1_sp | daughter2_sp
+            dupl_consistency = len(species_overlap) / len(all_species)
+            if consistency and dupl_consistency >= duplication_criterion or not consistency and len(species_overlap) >= duplication_criterion:
+                node.add_features(identity = 'duplication', overlap = len(species_overlap), consistency = dupl_consistency)
+                continue
+        if node == feca:
+            node.add_features(identity = 'LECA')
+        elif node.up.identity == 'duplication':
+            node.add_features(identity = 'LECA')
+        else:
+            node.add_features(identity = 'post-LECA')
+    for leca in feca.iter_search_nodes(identity = 'LECA'):
+        if len(leca.search_nodes(identity = 'duplication')) > 0:
+            leca.identity = 'unknown'
+        else:
+            lecas_down = leca.search_nodes(identity = 'LECA')
+            if len(lecas_down) > 1:
+                for leca_down in lecas_down[1:]:
+                    leca_down.identity = '?'
+    for postleca in feca.iter_search_nodes(identity = 'post-LECA'):
+        if len(postleca.search_nodes(identity = 'LECA')) > 0:
+            postleca.identity = 'unknown'
+    # Change rare unknown nodes that don't fulfill the duplication criterion but are duplications because there are duplications in both their children
+    for unknown in feca.iter_search_nodes(identity = "unknown"):
+        daughter1, daughter2 = unknown.get_children()
+        if len(daughter1.search_nodes(identity = 'duplication')) > 0 and len(daughter2.search_nodes(identity = 'duplication')) > 0:
+            unknown.identity = 'duplication'
+            daughter1_sp = set([leaf.taxid for leaf in daughter1])
+            daughter2_sp = set([leaf.taxid for leaf in daughter2])
+            species_overlap = daughter1_sp & daughter2_sp
+            all_species = daughter1_sp | daughter2_sp
+            dupl_consistency = len(species_overlap) / len(all_species)
+            unknown.add_features(overlap = len(species_overlap), consistency = dupl_consistency)
+
 def get_prokaryotic_sister(euk_clade, tree, farthest):
     """Determines both possible prokaryotic sister groups in an unrooted way or a rooted way using the rooting on the farthest leaf"""
     sister = euk_clade.get_sisters() # Should be checked if there are any eukaryotic sequences in the sister group
@@ -731,7 +783,7 @@ def collect_dupl_information(euk_clade, feca_count, dupl_dict, mode = 'minimum',
         children = duplication.get_children()
         ogs1 = [leca.name for leca in children[0].iter_search_nodes(identity = 'LECA')]
         ogs2 = [leca.name for leca in children[1].iter_search_nodes(identity = 'LECA')]
-        dupl_dict[dupl_id] = (duplication.name, support, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, ebl)
+        dupl_dict[dupl_id] = (support, duplication.overlap, duplication.consistency, ','.join(ogs1) + ' - ' + ','.join(ogs2), rdl, dl, ebl)
 
 def collect_unknown_information(euk_clade, feca_count, unknown_dict, representing, human_seqs = None, human_represent = None, human_seq_info = None, scrollsaw = True):
     for i, unknown in enumerate(euk_clade.iter_search_nodes(identity = 'unknown')):

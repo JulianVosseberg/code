@@ -23,9 +23,9 @@ def get_annotation(seqs, seqs_function, group):
         if function_count[sorted_function_count[0]] > function_count[sorted_function_count[1]]:
             return sorted_function_count[0]
         else:
-            return 'NA'
+            return 'S'
     elif len(function_count) == 0:
-        return 'NA'
+        return 'S'
     else: # Just one function
         return function
 
@@ -140,14 +140,14 @@ with open(f'/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2
         functions1 = set([og_function[pfam][og]['Function'] for og in daughters[0].split(',')])
         functions2 = set([og_function[pfam][og]['Function'] for og in daughters[1].split(',')])
         ancestral = functions1.intersection(functions2)
-        if ancestral == {'NA'}:
-            dupl_annotation[pfam][dupl]['Function'] = 'NA'
-        elif len(ancestral - {'NA'}) == 1:
+        if ancestral == {'S'}:
+            dupl_annotation[pfam][dupl]['Function'] = 'S'
+        elif len(ancestral - {'S'}) == 1:
             #print(f"Ancestral function for {dupl}: {tuple(ancestral)[0]}")
-            dupl_annotation[pfam][dupl]['Function'] = tuple(ancestral - {'NA'})[0]
+            dupl_annotation[pfam][dupl]['Function'] = tuple(ancestral - {'S'})[0]
         elif len(ancestral) > 1:
             #sys.stderr.write(f'Warning: multiple ancestral functions for {dupl}.\n')
-            dupl_annotation[pfam][dupl]['Function'] = 'NA'
+            dupl_annotation[pfam][dupl]['Function'] = 'S'
         else:
             # Here comes the tricky part!
             # If parent duplication and the function of this duplication node overlaps with one of the daugher functions...
@@ -161,21 +161,21 @@ with open(f'/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2
                     # If one of the parent daughters fully contains the daughters of the current node, it is the parent node
                     if set(parent_daughters[0].split(',')) == daughters_combined or set(parent_daughters[1].split(',')) == daughters_combined:
                         parent_function = info['Function']
-                        if parent_function == 'NA':
+                        if parent_function == 'S':
                             #sys.stderr.write(f'Warning: function of parent node of {dupl} unclear.\n')
-                            dupl_annotation[pfam][dupl]['Function'] = 'NA'
+                            dupl_annotation[pfam][dupl]['Function'] = 'S'
                         elif parent_function in functions1.union(functions2):
                             #print(f'Ancestral function for {dupl} (based on parent node): {parent_function}')
                             dupl_annotation[pfam][dupl]['Function'] = parent_function
                         else:
-                            dupl_annotation[pfam][dupl]['Function'] = 'NA'
+                            dupl_annotation[pfam][dupl]['Function'] = 'S'
                         break
                 else:
                     #sys.stderr.write(f'Warning: no parent nodes for {dupl}, all other FECAs.\n')
-                    dupl_annotation[pfam][dupl]['Function'] = 'NA'
+                    dupl_annotation[pfam][dupl]['Function'] = 'S'
             else:
                 #sys.stderr.write(f'Warning: ancestral function for {dupl} unclear.\n')
-                dupl_annotation[pfam][dupl]['Function'] = 'NA'
+                dupl_annotation[pfam][dupl]['Function'] = 'S'
         go1 = set([og_function[pfam][og]['Localisation'] for og in daughters[0].split(',')])
         go2 = set([og_function[pfam][og]['Localisation'] for og in daughters[1].split(',')])
         ancestral = go1.intersection(go2)
