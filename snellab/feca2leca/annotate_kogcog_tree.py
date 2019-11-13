@@ -25,7 +25,8 @@ parser.add_argument('-c', help = 'if mode is minimum or maximum, find the branch
 args = parser.parse_args()
 
 if not args.p:
-    prefix = args.tree[:args.tree.find('.')]
+    prefix = os.path.basename(args.tree)
+    prefix = prefix[:prefix.find('.')]
 else:
     prefix = args.p
 if args.o:

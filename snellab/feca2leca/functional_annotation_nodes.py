@@ -7,6 +7,7 @@ def get_annotation(seqs, seqs_function, group):
     if group not in ('Function', 'Localisation'):
         sys.stderr.write('Error: annotation group not recognised.\n')
         return
+    unkn_return = {'Function' : 'S', 'Localisation' : 'NA'}
     function_count = {}
     for seq in seqs:
         if '_' in seq:
@@ -23,9 +24,9 @@ def get_annotation(seqs, seqs_function, group):
         if function_count[sorted_function_count[0]] > function_count[sorted_function_count[1]]:
             return sorted_function_count[0]
         else:
-            return 'S'
+            return unkn_return[group]
     elif len(function_count) == 0:
-        return 'S'
+        return unkn_return[group]
     else: # Just one function
         return function
 
