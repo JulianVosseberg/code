@@ -295,7 +295,7 @@ def duplication_check(leaves1, leaves2):
         return True
     else:
         return False
-    
+
 def duplication_check_rooted(node, assigning, coverage_criterion = 0.15, duplication_criterion = 0.2, consistency = True):
     """Duplication check in euk only tree, see annotate_and_reroot_euk_only"""
     daughter1, daughter2 = node.get_children()
@@ -320,7 +320,7 @@ def duplication_check_rooted(node, assigning, coverage_criterion = 0.15, duplica
                 return overlap
     else:
         return True
-    
+
 def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, duplication_criterion = 0.2, consistency = True):
     """Root tree on mid of longest possible distance between the LECAs"""
     for node in tree.traverse("preorder"):
@@ -444,7 +444,7 @@ def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, dup
                 break
         ##set root position
         child_node_root_detached = child_node_root.detach()
-        child_node_root_detached.add_features(dist = child_node_distance) 
+        child_node_root_detached.add_features(dist = child_node_distance)
         parent_node_root.add_child(name = "R", dist = parent_node_distance)
         R = tree&"R"
         R.add_child(name = "O", dist = 0) ##outgroup
@@ -463,8 +463,8 @@ def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, dup
     else:
         ## Either no duplications or 1 duplication
         ## Try rooting on each internal node
-        ## Would the root be a duplication node? 
-        ## What is the number of species overlap or duplication consistency? 
+        ## Would the root be a duplication node?
+        ## What is the number of species overlap or duplication consistency?
         ## Define LECAs for maximal species overlap or duplication consistency
         tmp_outgroup = ""
         tmp_overlap = 0
@@ -488,7 +488,7 @@ def annotate_and_reroot_euk_only(tree, assigning, coverage_criterion = 0.15, dup
                         print('Multiple rootings possible...', file = sys.stderr)
                         sys.exit()
             ##reset the root
-            ##branch lengths to root likely will be altered, but that doesn't matter for now. 
+            ##branch lengths to root likely will be altered, but that doesn't matter for now.
             tree.set_outgroup(default_outgroup)
         if tmp_outgroup != "":
             outgroup = tmp_outgroup
@@ -700,7 +700,7 @@ def reroot(euk_clade, tree):
     farthest = sister.get_farthest_leaf()[0]
     tree.set_outgroup(farthest) # Root on the leaf farthest from this eukaryotic clade (can be a false positive for example)
     return farthest.name
-            
+
 def reclassify_majority_sister(feca):
     """Tries to reclassify the prokaryotic sister-group in case it was classified broadly as bacterial, archaeal or cellular"""
     sister_taxids = [leaf.taxid for sister in feca_clade.get_sisters() for leaf in sister if leaf.prok_euk == 'Prokaryote']
@@ -826,7 +826,7 @@ def get_non_feca_sister(non_feca_node, tree): # In a rooted way (on farthest lea
             fecas.append(feca_clade.feca_no)
     if len(fecas) > 0:
         print('Warning: for non-FECA eukaryotic sequences in %s the sister group does contain a FECA' % prefix, file = sys.stderr)
-        lca_name += '+' + '+'.join(fecas) 
+        lca_name += '+' + '+'.join(fecas)
     return lca, lca_name, support
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------
@@ -883,7 +883,6 @@ if '-m' in opts:
 
 # Open tree, get supergroups and annotate leaves
 tree = open_tree(opts['-t'])
-supergroups2, supergroups5 = get_supergroups()
 annotate_prokaryotic_eukaryotic_leaves(tree, euk_only)
 
 # Assign all original sequences to representing sequence
@@ -1182,7 +1181,7 @@ else: # prok + euk
                 print(prefix, feca_no, '\t'.join(bl_information[feca_no]), sep = '\t', file = branch_lengths_out)
                 if feca_no in untrusted_fecas:
                     print(prefix, feca_no, 'No', '\t'.join(bl_information[feca_no][0:2]), untrusted_fecas[feca_no], sep = '\t', file = fecas_out)
-                else:  
+                else:
                     print(prefix, feca_no, 'Yes', '\t'.join(bl_information[feca_no][0:2]), 'NA', sep = '\t', file = fecas_out)
         fecas_out.close()
 

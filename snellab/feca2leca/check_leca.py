@@ -17,7 +17,6 @@ prefix = args.pfam
 bbh_seqs = args.sequence_ids
 coverage_criterion = args.l
 
-supergroups2, supergroups5 = get_supergroups()
 with open(f'/home/julian/julian2/pfam_hmm/improved_pipeline/euk_fasta/{prefix}_seqids.list') as all_seqs_file:
     all_seqs = [line.rstrip() for line in all_seqs_file]
 representing, human_represent = assign_all_seqs(bbh_seqs, all_seqs, euk_only = True, prefix = prefix)

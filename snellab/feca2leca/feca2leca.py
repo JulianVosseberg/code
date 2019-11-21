@@ -33,7 +33,6 @@ def open_tree(tree_file_path):
 
 def annotate_prokaryotic_eukaryotic_leaves(tree, euk_only):
     """Distinguishes prokaryotic (NCBI taxid) and eukaryotic leave names and annotates them"""
-    supergroups2, supergroups5 = get_supergroups()
     if euk_only:
         for leaf in tree:
             taxid = leaf.name[0:4]

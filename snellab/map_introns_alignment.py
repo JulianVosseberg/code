@@ -7,7 +7,7 @@ import sys
 import os
 import argparse
 import gzip
-from eukarya import *
+from eukarya import supergroups5 as supergroups
 import csv
 
 # Functions
@@ -179,7 +179,6 @@ threshold_percentage_genes = args.p # Intron has to be present in at least this 
 threshold_percentage_species = args.t # Intron has to be present in at least this many species
 threshold_species = args.n # Intron has to be present in at least X Opimoda (~unikont) and X Diphoda (~bikont) species
 
-_, supergroups = get_supergroups()
 groups = set(supergroups.values())
 # Parse alignment and create species_seqids_dict
 # Obtain coordinates
