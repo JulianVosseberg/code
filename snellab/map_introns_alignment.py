@@ -1,177 +1,291 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
-# Author: Sjoerd Gremmen
-# Adapted by Julian Vosseberg
+# Authors: Sjoerd Gremmen, Michelle Schinkel and Julian Vosseberg
 
-import sys; import getopt
+# Load modules
+import sys
+import os
+import argparse
+import gzip
+from eukarya import *
+import csv
 
-def usage():
-    print("\tUsage: map_introns_alignment.py [-h] [ options ] <cds_euk_ids.tsv> <alignment.fa>")
-    print("\t  cds_euk_ids.tsv is the output provided by get_cds_gff_euk_id.sh\n")
-    print("Options:\n\t-g: supergroups.tsv (ABBR\\tsupergroup (default: ~/julian2/snel-clan-genomes/eukarya/5_supergroups.tsv))")
-    print("\t-o: output directory (default: current directory)")
-    print("\t-s: intron shift allowed (default: 0)")
+# Functions
+def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
+    seqid_coordinates = {}
+    for species, seqids in species_seqids_dict.items():
+        if species in ('BBRI', 'ESIL'):
+            sys.stderr.write(f"Warning: no CDS coordinates can be retrieved from the gff file for {species}.\n")
+            continue
+        if os.path.isfile(f'{euk_path}/data_set/gff_files/{species}.gff3.gz'):
+            gff_file_name = f'{euk_path}/data_set/gff_files/{species}.gff3.gz'
+        elif os.path.isfile(f'{euk_path}/data_set/gff_files/{species}.gff.gz'):
+            gff_file_name = f'{euk_path}/data_set/gff_files/{species}.gff.gz'
+        else:
+            sys.stderr.write(f'Warning: no GFF file found for {species}.\n')
+            continue
+        original_ids = {}
+        print(f'Reading metadata file for {species}...')
+        with open(f'{euk_path}/data_set/proteomes_metadata/{species}.metadata.txt') as metadata_file:
+            metadata_file.readline()
+            lines = csv.reader(metadata_file, delimiter = '\t')
+            for fields in lines:
+                if fields[0] in seqids:
+                    original_id = fields[8]
+                    if original_id[:3] == 'ENS':
+                        original_id = original_id[:original_id.find('.')]
+                    if species == 'ODIO':
+                        original_id = 'GSOID_T' + original_id[6:]
+                    elif species == 'BSCH':
+                        original_id = original_id.replace('_', '.t')
+                    elif species == 'PMIN':
+                        original_id = original_id.replace('-RA', '-tr')
+                    elif species == 'AGAM':
+                        original_id = original_id.replace('-RA', '-PA')
+                    elif species == 'KFLA':
+                        original_id += '.CDS'
+                    elif species in ('LCOR', 'MVER'):
+                        original_id = 'mRNA_' + original_id
+                    elif species in ('CVEL', 'GINT'):
+                        original_id = original_id[:-3] # Remove -p1
+                    elif species in ('SFAL', 'ACOE', 'VCAR'):
+                        original_id = original_id[:-2] # Remove .p
+                    elif species in ('SMOE', 'CSUB', 'MSPE'):
+                        original_id = fields[10]
+                    original_ids[original_id] = fields[0]
+                if len(original_ids) == len(set(seqids)):
+                    break
+            else:
+                sys.stderr.write(f'Warning: not all sequence IDs for {species} found in metadata file.\n')
+        if species in ('SPLU', 'CANG', 'MLAR', 'LTRA', 'ODIO'):
+            with gzip.open(gff_file_name) as gff_file:
+                for line in gff_file:
+                    line = line.decode().rstrip()
+                    if line[0] == '#':
+                        continue
+                    fields = line.split('\t')
+                    if species == 'ODIO' and fields[2] == 'gene' or species != 'ODIO' and fields[2] == 'mRNA':
+                        info = fields[8].split(';')
+                        for field in info:
+                            key, value = field.split('=')
+                            if key == 'ID':
+                                new_id = value
+                                if species == 'ODIO':
+                                    new_id = 'rna' + new_id[4:] # gene --> rna
+                            elif species == 'ODIO' and key == 'Name' or species != 'ODIO' and key == 'proteinId':
+                                try:
+                                    eukarya_id = original_ids.pop(value)
+                                    original_ids[new_id] = eukarya_id
+                                except KeyError:
+                                    pass
+                                break
+        print(f'Reading gff file for {species}...')
+        with gzip.open(gff_file_name) as gff_file:
+            version3 = True
+            if gff_file_name.endswith('gff.gz'):
+                version3 = False
+            for line in gff_file:
+                line = line.decode()
+                if line[0] == '#':
+                    continue
+                line = line.rstrip().rstrip(';')
+                if species == 'BSCH' and line == '':
+                    continue
+                fields = line.split('\t')
+                if fields[2] == 'CDS':
+                    if version3: #or species in ('NGAD', 'KFLA', 'GINT'):
+                        info = fields[8].split(';')
+                        sep = '='
+                    else:
+                        info = fields[8].split('; ')
+                        sep = ' '
+                    info_dict = {}
+                    for field in info:
+                        if sep not in field:
+                            #sys.stderr.write(f'Warning: something odd with separator ({sep}) in this line in the gff file for {species}:\n{line}\n')
+                            continue
+                        key, value = field.split(sep)
+                        info_dict[key] = value
+                    if 'protein_id' in info_dict and species != 'ODIO':
+                        original_id = info_dict['protein_id']
+                    elif 'proteinId' in info_dict:
+                        original_id = info_dict['proteinId']
+                    elif 'Parent' in info_dict and species != 'OVOL':
+                        original_id = info_dict['Parent']
+                    elif 'transcript_id' in info_dict:
+                        original_id = info_dict['transcript_id'][1:-1] # Remove ""
+                    elif 'ID' in info_dict:
+                        original_id = info_dict['ID']
+                    else:
+                        sys.stderr.write(f'Error: elements in this line in the gff file for {species} not recognised:\n{line}\n')
+                        break
+                    if species == 'NGAD':
+                        original_id = original_id.split(' ')[0]
+                    elif species in ('SMOE', 'CSUB', 'MSPE'):
+                        original_id = original_id[:original_id.find('.')]
+                    elif species in ('SFAL', 'ACOE', 'VCAR'):
+                        original_id = original_id[:original_id.find('.v')]
+                    elif species == 'NGAD':
+                        original_id = original_id[:original_id.find(' ')]
+                    elif species in ('OVOL', 'PPAC', 'SRAT', 'GSAL', 'SBAT', 'SMAN', 'EMUL', 'TASI', 'SMED'):
+                        original_id = original_id[original_id.find(':') + 1:]
+                    if original_id in original_ids:
+                        eukarya_id = original_ids[original_id]
+                        new_entry = [int(fields[3]), int(fields[4]), fields[6]]
+                        try:
+                            seqid_coordinates[eukarya_id].append(new_entry)
+                        except KeyError:
+                            seqid_coordinates[eukarya_id] = [new_entry]
+        for seqid in seqids:
+            if seqid not in seqid_coordinates:
+                sys.stderr.write(f'Warning: {seqid} not detected in gff file.\n')
+        print('Done!')
+    return seqid_coordinates
 
 # Parse arguments
-optlist, args = getopt.getopt(sys.argv[1:], 'g:o:s:h')
-opts = {}
-for k,v in optlist:
-    if k == '-h':
-        usage(); sys.exit()
-    else:
-        opts[k] = v
-if len(args) != 2:
-    print("Please provide a cds file and alignment\n")
-    usage(); sys.exit()
-else:
-    information_about_CDS = args[0]
-    Your_protein_alignment = args[1]
+parser = argparse.ArgumentParser(description = "This script maps intron positions onto a protein alignment.")
+parser.add_argument("alignment", help = 'protein alignment in fasta format')
+parser.add_argument('-o', metavar = 'outdir', help = 'directory for output files (default: current)')
+parser.add_argument('-e', metavar = 'eukarya_path', help = 'directory containing the Eukarya database (default: ~julian/julian2/snel-clan-genomes/eukarya)')
+parser.add_argument('-i', help = 'infer LECA introns and introns predating duplications (default: off)', action = 'store_true')
+parser.add_argument('-s', metavar = 'shifts', help = 'intron shift allowed (default: 0)', type = int, default = 0)
+parser.add_argument("-p", metavar = 'gene%', help = "percentage of genes in which an intron at least has to occur to call it a LECA intron (default: 7.5)", default = 7.5)
+parser.add_argument("-t", metavar = 'species%', help = "percentage of species in which an intron at least has to occur to call it a LECA intron (default: 15)", default = 15)
+parser.add_argument("-n", metavar = 'species', help = "number of Opimoda and Diphoda species an intron at least has to occur to call it a LECA intron (default: 2)", default = 2)
+#parser.add_argument('-d', metavar = 'domains', help = 'Pfam domains instead of full-length genes', action = 'store_true')
+args = parser.parse_args()
 
-if '-g' in opts.keys():
-    Species_to_supergroups = opts['-g']
+# To add: sequence ID --> paralogue table
+
+if args.o:
+    output_path = args.o
+    if not os.path.isdir(output_path):
+        os.makedirs(output_path)
 else:
-    Species_to_supergroups = '/hosts/linuxhome/memory/julian2/snel-clan-genomes/eukarya/5_supergroups.tsv'
-if '-o' in opts.keys():
-    output_path = opts['-o'] + "/"
+    output_path = '.'
+if args.e:
+    euk_path = args.e
 else:
-    output_path = ''
-if '-s' in opts.keys():
-    shifts = int(opts['-s'])
-    if shifts > 10:
-        print("Warning: the number of shifts you want to tolerate seems very high", file = sys.stderr)
-else:
-    shifts = 0
+    euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya'
+inference = False
+if args.i:
+    inference = True
+shifts = args.s
+if shifts > 5:
+    sys.stderr(f"Warning: the number of shifts you want to tolerate {shifts} seems very high\n.")
 
 # Set thresholds for considering an intron a LECA intron
-threshold_percentage_genes = 7.5 # Intron has to be present in at least this many genes
-threshold_percentage_species = 15 # Intron has to be present in at least this many species
-threshold_species = 2 # Intron has to be present in at least X Opimoda (~unikont) and X Diphoda (~bikont) species
+threshold_percentage_genes = args.p # Intron has to be present in at least this many genes
+threshold_percentage_species = args.t # Intron has to be present in at least this many species
+threshold_species = args.n # Intron has to be present in at least X Opimoda (~unikont) and X Diphoda (~bikont) species
+
+_, supergroups = get_supergroups()
+groups = set(supergroups.values())
+# Parse alignment and create species_seqids_dict
+# Obtain coordinates
 
 # Step 1: Parse input files
-# Parse CDS information; euk_cds_dict contains coordinates in format {seq_id:[['+/-', start, end], ['+/-', start, end]]}
-cds_information = open(information_about_CDS,"r")    
-euk_cds_dict = {}
-for line in cds_information:
-    line = line.strip()
-    words = line.split("\t")
-    sequence_id = words[0]
-    start_cds = int(words[1])
-    stop_cds = int(words[2])
-    direction = words[3]
-    if sequence_id in euk_cds_dict:
-        temporary_list = [direction, start_cds,stop_cds]
-        euk_cds_dict[sequence_id].append(temporary_list)
-    else:
-        euk_cds_dict[sequence_id]= [[direction,start_cds,stop_cds]]
-cds_information.close()
 
-# Check if all coding parts of one gene lie in the same direction
-for key in euk_cds_dict:
-    direction = 'none'
-    for coding_sequence in euk_cds_dict[key]:
-        if direction == 'none':
-            direction = coding_sequence[0]
-        else:
-            if coding_sequence[0] != direction:
-                print ("FATAL ERROR: the CDSs of ",key," are not in the same direction", file = sys.stderr)
-                sys.exit()
-
-# Parse supergroup information
-supergroups_doc = open(Species_to_supergroups, "r")
-supergroups ={}
-groups = []
-for line in supergroups_doc:
-    line = line.strip()
-    words = line.split()
-    supergroups[words[0]] =str(words[1])
-    if words[1] not in groups:
-        groups.append(words[1])
-supergroups_doc.close()
-                
 # Parse alignment
-align = open(Your_protein_alignment, 'r')
-aligned_proteins = {} 
+species_seqids_dict = {}
+aligned_proteins = {}
 alignment = ""
-OG = '' 
+OG = ''
 OG_list = []
 OGdict = {}
 number_species_dict ={}
 total_number_of_genes = {}
 species_list = {}
 number_of_species ={}
-for line in align:
-    line = line.strip()
-    if line.startswith(">"): 
-        end = line.rfind("_")
-        OG = line[1:end]
-        species = line[end+1:end+5]
-        if OG not in OG_list:
-            OG_list.append(OG)
-            total_number_of_genes[OG] = 0
-            OGdict[OG] = {}
-            number_species_dict[OG] = {}
-            number_of_species[OG] = 0
-            species_list[OG] = []
-            for group in groups:
-                OGdict[OG][group]=0
-                number_species_dict[OG][group] = 0
-        if species not in supergroups:
-            print("Error: ",line[end+1:end+5]," not in supergroup file", file = sys.stderr)
+with open(args.alignment) as fasta_file:
+    for line in fasta_file:
+        line = line.rstrip()
+        if line[0] == '>':
+            parts = line.split('_')
+            OG = parts[0][1:]
+            seqid = parts[1]
+            species = seqid[:4]
+            species_seqids_dict[species] = species_seqids_dict.get(species, []) + [seqid]
+            if OG not in OG_list:
+                OG_list.append(OG)
+                total_number_of_genes[OG] = 0
+                OGdict[OG] = {}
+                number_species_dict[OG] = {}
+                number_of_species[OG] = 0
+                species_list[OG] = []
+                for group in groups:
+                    OGdict[OG][group]=0
+                    number_species_dict[OG][group] = 0
+            if species not in supergroups:
+                sys.stderr.write(f"Warning: {species} not recognised.\n")
+            else:
+                OGdict[OG][supergroups[species]] += 1
+                total_number_of_genes[OG] +=1
+                if species not in species_list[OG]:
+                    species_list[OG].append(species)
+                    number_of_species[OG] += 1
+                    number_species_dict[OG][supergroups[species]]+=1
+            if alignment != '':
+                aligned_proteins[protein] = alignment
+                alignment = ''
+            protein = line[1:]
         else:
-            OGdict[OG][supergroups[line[end+1:end+5]]] += 1
-            total_number_of_genes[OG] +=1
-            if species not in species_list[OG]:
-                species_list[OG].append(species)
-                number_of_species[OG] += 1
-                number_species_dict[OG][supergroups[line[end+1:end+5]]]+=1
-        if alignment != '':
-            aligned_proteins[protein] = alignment
-            alignment = ''
-        protein = line[1:]  
-    else:
-        alignment += line
-aligned_proteins[protein] = alignment 
-align.close()
+            alignment += line
+    aligned_proteins[protein] = alignment
+
+# Get CDS coordinates
+euk_cds_dict = get_coordinates(species_seqids_dict)
+
+# Check if all coding parts of one gene lie in the same direction
+for key in euk_cds_dict:
+    direction = 'none'
+    for coding_sequence in euk_cds_dict[key]:
+        if direction == 'none':
+            direction = coding_sequence[-1]
+        else:
+            if coding_sequence[-1] != direction:
+                print ("FATAL ERROR: the CDSs of ",key," are not in the same direction", file = sys.stderr)
+                sys.exit()
 
 # Step 2: Map intron positions onto the proteins
 id_length_introns = {}
-for gene in euk_cds_dict: 
+for gene in euk_cds_dict:
     id_length_introns[gene] = []
     length_without_introns = 0
     location_introns = []
-    startcds = euk_cds_dict[gene][0][1]
-    stopcds = euk_cds_dict[gene][len(euk_cds_dict[gene])-1][2] #-1 needed for counting in python
+    startcds = euk_cds_dict[gene][0][0]
+    stopcds = euk_cds_dict[gene][len(euk_cds_dict[gene])-1][1] #-1 needed for counting in python
     # Some of the minus directed CDSs needed to be reversed.
-    if euk_cds_dict[gene][0][0] == "-":
+    if euk_cds_dict[gene][0][2] == "-":
         if startcds < stopcds:
             euk_cds_dict[gene] = euk_cds_dict[gene][::-1]
     for intron_information in euk_cds_dict[gene]:
         if length_without_introns == 0:
-            length_without_introns = intron_information[2] - intron_information[1] +1 
-            phase = length_without_introns%3 
-            location_intron = (length_without_introns-phase)/3 +1 
+            length_without_introns = intron_information[1] - intron_information[0] +1
+            phase = length_without_introns%3
+            location_intron = (length_without_introns-phase)/3 +1
         else:
             intron = [phase, location_intron]
             location_introns.append(intron)
             # Adding intron to list to prevent end of protein being seen as intron.
-            length_without_introns += (intron_information[2]-intron_information[1])+1 
-            phase = length_without_introns%3 
-            location_intron = (length_without_introns-phase)/3 +1 
+            length_without_introns += (intron_information[1]-intron_information[0])+1
+            phase = length_without_introns%3
+            location_intron = (length_without_introns-phase)/3 +1
         id_length_introns[gene] = [length_without_introns/3, location_introns]
-        # everything is devided by three, from length of mRNA (nucleotides) to polypeptide length (amino acid). 
+        # everything is devided by three, from length of mRNA (nucleotides) to polypeptide length (amino acid).
     if length_without_introns%3 != 0:
         print ("ERROR: ",gene, " seems to be incorrectly annotated", file = sys.stderr) #A small check if the genes are correctly annotated
 
 # Step 3 : Map intron positions onto the alignment
 if shifts <= 3:
-    aa = 1    
+    aa = 1
 else:
-    if shifts%3 == 0: 
+    if shifts%3 == 0:
         aa = shifts/3
     else:
         aa =(shifts-shifts%3)/3 +1 # 0-3 --> aa=1, 4-6 --> aa=2, 7-9 --> aa=3, ...
 
-introns_shifts = {} 
+introns_shifts = {}
 dict_with_introns ={}
 gene_supergroup_dict ={}
 LECA_introns = {}
@@ -181,34 +295,34 @@ for OG in OG_list:
     dict_with_introns[OG]={}
     for protein in aligned_proteins:
         position_intron = 0 #regulates that not every intron is checked every time.
-        if OG in protein: 
+        if OG in protein:
             begin = protein.rfind("_")+1
             ID = protein[begin:]
             location = 0
-            position = 0 
+            position = 0
             if ID in id_length_introns:
-                for character in aligned_proteins[protein]: 
+                for character in aligned_proteins[protein]:
                     position += 1
                     if character != "-":
                         location +=1
                     if position_intron < len(id_length_introns[ID][1]):
                         if id_length_introns[ID][1][position_intron][1] == location:
                             intron= id_length_introns[ID][1][position_intron]
-                            position_intron+=1 
+                            position_intron+=1
                             if position not in dict_with_introns[OG]:
                                 dict_with_introns[OG][position]=[[],[],[]]
                             dict_with_introns[OG][position][intron[0]].append(protein)
-                            
-    introns_shifts[OG] = {} 
+
+    introns_shifts[OG] = {}
     dominant_phases[OG] = {}
-    for position in dict_with_introns[OG]: 
+    for position in dict_with_introns[OG]:
         introns_shifts[OG][position]=[]
         dominant = dict_with_introns[OG][position][0]
         dominant_phase = 0
         if len(dict_with_introns[OG][position][1])>len(dominant):
             dominant = dict_with_introns[OG][position][1]
-            dominant_phase = 1 
-        if len(dict_with_introns[OG][position][2]) > len(dominant): 
+            dominant_phase = 1
+        if len(dict_with_introns[OG][position][2]) > len(dominant):
             dominant = dict_with_introns[OG][position][2]
             dominant_phase = 2
         dominant_phases[OG][position]=dominant_phase
@@ -216,16 +330,16 @@ for OG in OG_list:
             if k in dict_with_introns[OG]:
                 introns_shifts[OG][position].extend(dict_with_introns[OG][k])
             else:
-                introns_shifts[OG][position].extend([[],[],[]]) 
+                introns_shifts[OG][position].extend([[],[],[]])
         introns_shifts[OG][position] = introns_shifts[OG][position][int(3*aa+dominant_phase-shifts):int(3*aa+dominant_phase+shifts+1)]
         for j in range(0,len(introns_shifts[OG][position]),1):
-            if len(introns_shifts[OG][position][j]) > len(dominant): 
-                #Assumption is that in the range defined there can only be 1 LECA intron and that if shift <3 
+            if len(introns_shifts[OG][position][j]) > len(dominant):
+                #Assumption is that in the range defined there can only be 1 LECA intron and that if shift <3
                 #there can only be one dominant intron on 1 aa position.
                 del introns_shifts[OG][position]
                 #Selection: If near this position is a location with more introns, this location is deleted.
                 break
-    for dominant_position in introns_shifts[OG]: 
+    for dominant_position in introns_shifts[OG]:
         gene_supergroup_dict[OG][dominant_position] = {"Amoebozoa" : [],"Obazoa" : [], "Excavata": [], "Archaeplastida": [], "RASH": []}
         frames = -1
         for phase in introns_shifts[OG][dominant_position]:
@@ -241,10 +355,10 @@ for OG in OG_list:
                     except:
                         print("ERROR: something went wrong while composing the gene supergroup dictionary",ID, file = sys.stderr)
 
-    # Write mapped introns to output file   
+    # Write mapped introns to output file
     OG_file = open(output_path+"analysis_"+OG+".txt", "w")
     raw = open(output_path+"raw_data_"+OG+".txt", "w")
-    
+
     #printing a header for all documents:
     print("Intron position/Supergroup",end="\t",file=OG_file)
     print("Intron position/Supergroup",end="\t",file=raw)
@@ -257,7 +371,7 @@ for OG in OG_list:
             print(i,end="\t",file=raw)
     print("Percentage of genes","\t", "Percentage of species", file = OG_file)
     print("Percentage of genes","\t","Percentage of species", file = raw)
-    
+
     for intron_position in sorted(gene_supergroup_dict[OG]):
         number_of_species_intron = 0
         list_with_species_intron =[]
@@ -274,18 +388,18 @@ for OG in OG_list:
             percentage_species_per_group[group] = 0
             genes_per_group = 0
             species_per_group = 0
-            for phase in gene_supergroup_dict[OG][intron_position][group]: 
+            for phase in gene_supergroup_dict[OG][intron_position][group]:
                 phases+=1
                 if phases not in genes_per_phase:
                     genes_per_phase[phases] = 0
-                
+
                 #Counting the Opimoda and Diphoda for required threshold.
                 # Counting several variables needed to calulate percentages.
                 for gene in phase:
                     if group == "Amoebozoa" or group == "Obazoa":
                         uniconta += 1
                     else:
-                        biconta += 1 
+                        biconta += 1
                     begin = gene.rfind("_")+1
                     species = gene[begin:begin+4]
                     if species not in list_with_species_intron:
@@ -295,19 +409,19 @@ for OG in OG_list:
                     genes_per_phase[phases] +=1
                     genes_per_group += 1
                     genes_per_position += 1
-            
+
             #Caluclating percentages to see if introns reach the threshold
             if genes_per_group != 0:
                 percentage_genes_per_group[group] = str((genes_per_group/OGdict[OG][group])*100)[0:4]
                 percentage_species_per_group[group] = str((species_per_group/number_species_dict[OG][group]*100))[0:4]
         total_percentage_of_gene = str((genes_per_position/total_number_of_genes[OG])*100)[0:4]
         percentage_of_species = str((number_of_species_intron/number_of_species[OG])*100)[0:4]
-        
+
         #Check if introns reach the thresholds to be considered LECA genes
         if uniconta >= threshold_species and biconta >= threshold_species:
             if float(total_percentage_of_gene) > threshold_percentage_genes:
                 if float(percentage_of_species) > threshold_percentage_species:
-                    
+
                     #making the analysis file
                     k = 0
                     print(">",intron_position,"\t","Dominant_phase = ", dominant_phases[OG][intron_position], file = OG_file)
@@ -329,7 +443,7 @@ for OG in OG_list:
                             print(percentage_per_phase,"%",end="\t",file = OG_file)
                     print(total_percentage_of_gene,"%","\t", percentage_of_species,"%","\n", file = OG_file)
         print(">",intron_position,"\t","Dominant phase = ",dominant_phases[OG][intron_position], file = raw)
-        
+
         #Builing a file with raw data
         for group in gene_supergroup_dict[OG][intron_position]:
             print(group, end="\t", file =raw)
@@ -345,8 +459,8 @@ for OG in OG_list:
                     print(percentage_per_phase,"%",end="\t",file = raw)
                 else:
                     print("total percentage of genes", "\t",percentage_per_phase,"%",end="\t", file =raw)
-        print(total_percentage_of_gene,"%","\n", file = raw)         
-    raw.close()    
+        print(total_percentage_of_gene,"%","\n", file = raw)
+    raw.close()
     OG_file.close()
 
 # Make a log file
