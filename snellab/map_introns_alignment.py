@@ -35,6 +35,15 @@ def parse_alignment(fasta_file):
     aligned_proteins[seqid] = alignment
     return species_seqids_dict, OG_dict, aligned_proteins
 
+def count_groups(seqids, unique = True):
+    group_counts = {g : 0 for g in set(supergroups.values())}
+    species = [seqid[:4] for seqid in seqids]
+    if unique:
+        species = set(species)
+    for spec in species:
+        group_counts[supergroups[spec]] += 1
+    return group_counts
+
 def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
     seqid_coordinates = {}
     for species, seqids in species_seqids_dict.items():
@@ -194,14 +203,6 @@ def map_introns_aa(euk_cds_dict):
             sys.stderr.write(f"Warning: {seqid} seems to be incorrectly annotated.\n") #A small check if the genes are correctly annotated
     return location_introns
 
-def count_groups(seqids, unique = True):
-    group_counts = {g : 0 for g in set(supergroups.values())}
-    species = [seqid[:4] for seqid in seqids]
-    if unique:
-        species = set(species)
-    for spec in species:
-        group_counts[supergroups[spec]] += 1
-    return group_counts
 
 # Parse arguments
 parser = argparse.ArgumentParser(description = "This script maps intron positions onto a protein alignment.")
@@ -258,7 +259,14 @@ euk_cds_dict = get_coordinates(species_seqids_dict)
 # Step 2: Map intron positions onto the proteins
 location_introns = map_introns_aa(euk_cds_dict)
 
-# Step 3: Map intron positions onto the alignment
+# Step 3: Create sequence features file for viewing intron positions in Jalview
+seqid_OG = {seqid : og for og, seqids in OG_dict.items() for seqid in seqids}
+with open(f'{output_path}/{args.alignment[:args.alignment.find(".")]}_jalview.sff', 'w') as features_file:
+    features_file.write('phase0\tgreen\nphase1\tblue\nphase2\tmagenta\n')
+    for seqid, introns in location_introns.items():
+        for phase, position in introns:
+            line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n'
+            features_file.write(line)
 if shifts <= 3:
     aa = 1
 else:
