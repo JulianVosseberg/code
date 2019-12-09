@@ -190,7 +190,6 @@ def map_introns_aa(euk_cds_dict, lengths):
         # Some of the minus directed CDSs needed to be reversed.
         if directions == {"-"}:
             if startcds < stopcds:
-                #euk_cds_dict[seqid] = euk_cds_dict[seqid][::-1]
                 CDSs.reverse()
         try:
             start_phase = int(CDSs[0][3])
@@ -276,11 +275,15 @@ location_introns = map_introns_aa(euk_cds_dict, lengths)
 # Step 3: Create sequence features file for viewing intron positions in Jalview
 seqid_OG = {seqid : og for og, seqids in OG_dict.items() for seqid in seqids}
 with open(f'{output_path}/{args.alignment[:args.alignment.find(".")]}_jalview.sff', 'w') as features_file:
-    features_file.write('phase0\tgreen\nphase1\tblue\nphase2\tmagenta\n')
-    for seqid, introns in location_introns.items():
-        for phase, position in introns:
-            line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n'
-            features_file.write(line)
+    features_file.write('phase0\tgreen\nphase1\tblue\nphase2\tmagenta\nNA\tblack\n')
+    for seqid in aligned_proteins:
+        try:
+            introns = location_introns[seqid]
+            for phase, position in introns:
+                line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n'
+        except KeyError:
+            line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n'
+        features_file.write(line)
 if shifts <= 3:
     aa = 1
 else:
