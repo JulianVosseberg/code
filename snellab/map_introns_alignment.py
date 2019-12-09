@@ -164,7 +164,7 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
                         original_id = original_id[original_id.find(':') + 1:]
                     if original_id in original_ids:
                         eukarya_id = original_ids[original_id]
-                        new_entry = [int(fields[3]), int(fields[4]), fields[6]]
+                        new_entry = [int(fields[3]), int(fields[4]), fields[6], fields[7]]
                         try:
                             seqid_coordinates[eukarya_id].append(new_entry)
                         except KeyError:
@@ -175,11 +175,11 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
         print('Done!')
     return seqid_coordinates
 
-def map_introns_aa(euk_cds_dict):
+def map_introns_aa(euk_cds_dict, lengths):
     location_introns = {}
     for seqid, CDSs in euk_cds_dict.items():
         # Check if all coding parts of one gene lie in the same direction
-        directions = set([cds[-1] for cds in CDSs])
+        directions = set([cds[-2] for cds in CDSs])
         if len(directions) != 1:
             sys.exit(f"FATAL ERROR: the CDSs of {seqid} are not in the same direction.")
         location_introns[seqid] = []
@@ -192,15 +192,28 @@ def map_introns_aa(euk_cds_dict):
             if startcds < stopcds:
                 #euk_cds_dict[seqid] = euk_cds_dict[seqid][::-1]
                 CDSs.reverse()
+        try:
+            start_phase = int(CDSs[0][3])
+        except ValueError:
+            sys.stderr.write(f'Warning: no start phase detected for {seqid}. Excluded from analysis.\n')
+        if start_phase != 0:
+            if directions == {'-'}:
+                CDSs[0][1] += 3 - start_phase
+            else:
+                CDSs[0][0] -= 3 - start_phase
         # Loop through CDSs, excluding the last to prevent the end of protein being seen as intron, and add to list.
         for intron_information in CDSs[:-1]:
             length_without_introns += intron_information[1] - intron_information[0] + 1
             phase = length_without_introns % 3
             location_intron = int((length_without_introns - phase)/3 + 1)
             location_introns[seqid].append([phase, location_intron])
-            # everything is devided by three, from length of mRNA (nucleotides) to polypeptide length (amino acid).
+        length_without_introns += CDSs[-1][1] - CDSs[-1][0] + 1
+        # everything is devided by three, from length of mRNA (nucleotides) to polypeptide length (amino acid).
         if length_without_introns%3 != 0:
             sys.stderr.write(f"Warning: {seqid} seems to be incorrectly annotated.\n") #A small check if the genes are correctly annotated
+        if not (length_without_introns // 3 == lengths[seqid] or length_without_introns // 3 == lengths[seqid] + 1):
+            sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {lengths[seqid]} (aln). Excluded from analysis.\n')
+            del location_introns[seqid]
     return location_introns
 
 
@@ -252,12 +265,13 @@ with open(args.alignment) as fasta_file:
     species_seqids_dict, OG_dict, aligned_proteins = parse_alignment(fasta_file)
 OG_group_seq_count = {OG : count_groups(seqs, unique = False) for OG, seqs in OG_dict.items()}
 OG_group_species_count = {OG : count_groups(seqs, unique = True) for OG, seqs in OG_dict.items()}
+lengths = {seqid : len(aln.replace('-', '')) for seqid, aln in aligned_proteins.items()}
 
 # Get CDS coordinates
 euk_cds_dict = get_coordinates(species_seqids_dict)
 
 # Step 2: Map intron positions onto the proteins
-location_introns = map_introns_aa(euk_cds_dict)
+location_introns = map_introns_aa(euk_cds_dict, lengths)
 
 # Step 3: Create sequence features file for viewing intron positions in Jalview
 seqid_OG = {seqid : og for og, seqids in OG_dict.items() for seqid in seqids}
