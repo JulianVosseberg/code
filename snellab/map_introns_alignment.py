@@ -223,6 +223,9 @@ def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
         intron_count = 0 #regulates that not every intron is checked every time.
         location = 0
         og = seqid_OG[seqid]
+        if og not in aln_intron_positions:
+            aln_intron_positions[og] = {}
+        og_positions = aln_intron_positions[og]  # Retrieve information present
         for position, character in enumerate(aligned_proteins[seqid]):
             if character == "-":
                 continue
@@ -230,11 +233,10 @@ def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
             # Multiple introns could be located on this amino acid
             while introns[intron_count][1] == location:
                 phase = introns[intron_count][0]
-                aln_intron_position = f'{position + 1}.{phase}'
-                try:
-                    aln_intron_positions[og][aln_intron_position] = aln_intron_positions[og].get(aln_intron_position, []) + [seqid]
-                except KeyError: # If OG not yet in dict
-                    aln_intron_positions[og] = {aln_intron_position : [seqid]}
+                aln_intron_position = position + 1
+                if aln_intron_position not in og_positions:
+                    og_positions[aln_intron_position] = [[], [], []]
+                og_positions[aln_intron_position][phase].append(seqid)
                 intron_count += 1
                 if intron_count == len(introns):
                     break
