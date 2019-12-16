@@ -35,7 +35,7 @@ def parse_alignment(fasta_file):
     aligned_proteins[seqid] = alignment
     return species_seqids_dict, OG_dict, aligned_proteins
 
-def count_groups(seqids, unique = True):
+def count_groups(seqids, supergroups, unique = True):
     group_counts = {g : 0 for g in set(supergroups.values())}
     species = [seqid[:4] for seqid in seqids]
     if unique:
@@ -215,6 +215,62 @@ def map_introns_aa(euk_cds_dict, lengths):
             del location_introns[seqid]
     return location_introns
 
+def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
+    aln_intron_positions = {}
+    for seqid, introns in location_introns.items():
+        if len(introns) == 0:
+            continue
+        intron_count = 0 #regulates that not every intron is checked every time.
+        location = 0
+        og = seqid_OG[seqid]
+        for position, character in enumerate(aligned_proteins[seqid]):
+            if character == "-":
+                continue
+            location += 1
+            # Multiple introns could be located on this amino acid
+            while introns[intron_count][1] == location:
+                phase = introns[intron_count][0]
+                aln_intron_position = f'{position + 1}.{phase}'
+                try:
+                    aln_intron_positions[og][aln_intron_position] = aln_intron_positions[og].get(aln_intron_position, []) + [seqid]
+                except KeyError: # If OG not yet in dict
+                    aln_intron_positions[og] = {aln_intron_position : [seqid]}
+                intron_count += 1
+                if intron_count == len(introns):
+                    break
+            else:
+                continue
+            break
+        else:
+            sys.stderr.write(f'Not all intron positions for {seqid} found in the alignment.\n')
+    return aln_intron_positions
+
+def cluster_neighbouring_positions(aln_intron_positions, OG_dict, nt_shifts, aa_shifts):
+    introns_shifts = {}
+    for OG, aa_positions in aln_intron_positions.items():
+        introns_shifts[OG] = {}
+        for position, phases in aa_positions.items():
+            introns_shifts[OG][position] = {}
+            for phase, seqs in enumerate(phases):
+                if len(seqs) == 0:
+                    continue
+                introns_shifts[OG][position][phase] = []
+                for k in range(int(position-aa_shifts), int(position+aa_shifts) + 1, 1):  #k is just a variable looping through the list of numbers
+                    if k in aln_intron_positions[OG]:
+                        introns_shifts[OG][position][phase].extend(aln_intron_positions[OG][k])
+                    else:
+                        introns_shifts[OG][position][phase].extend([[],[],[]])
+                introns_shifts[OG][position][phase] = introns_shifts[OG][position][phase][int(3*aa_shifts+phase-nt_shifts):int(3*aa_shifts+phase+nt_shifts+1)]
+                for j in range(0, len(introns_shifts[OG][position][phase]), 1):
+                    if len(introns_shifts[OG][position][phase][j]) > len(seqs):
+                        #Assumption is that in the range defined there can only be 1 LECA intron and that if shift <3
+                        #there can only be one dominant intron on 1 aa position.
+                        del introns_shifts[OG][position][phase]
+                        #Selection: If near this position is a location with more introns, this location is deleted.
+                        break
+            if len(introns_shifts[OG][position]) == 0:
+                del introns_shifts[OG][position]
+    return introns_shifts
 
 # Parse arguments
 parser = argparse.ArgumentParser(description = "This script maps intron positions onto a protein alignment.")
@@ -225,7 +281,7 @@ parser.add_argument('-i', help = 'infer LECA introns and introns predating dupli
 parser.add_argument('-s', metavar = 'shifts', help = 'intron shift allowed (default: 0)', type = int, default = 0)
 parser.add_argument("-p", metavar = 'gene%', help = "percentage of genes in which an intron at least has to occur to call it a LECA intron (default: 7.5)", default = 7.5)
 parser.add_argument("-t", metavar = 'species%', help = "percentage of species in which an intron at least has to occur to call it a LECA intron (default: 15)", default = 15)
-parser.add_argument("-n", metavar = 'species', help = "number of Opimoda and Diphoda species an intron at least has to occur to call it a LECA intron (default: 2)", default = 2)
+parser.add_argument("-n", metavar = 'species', help = "minimum number of Opimoda and Diphoda species that should have an intron to call it a LECA intron (default: 2)", default = 2)
 #parser.add_argument('-d', metavar = 'domains', help = 'Pfam domains instead of full-length genes', action = 'store_true')
 args = parser.parse_args()
 
@@ -280,68 +336,27 @@ with open(f'{output_path}/{args.alignment[:args.alignment.find(".")]}_jalview.sf
         try:
             introns = location_introns[seqid]
             for phase, position in introns:
-                line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n'
+                features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n')
         except KeyError:
-            line = f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n'
-        features_file.write(line)
+            features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n')
+
+# Step 4: Map intron positions onto the alignment
+aln_intron_positions = map_introns_aln(location_introns, aligned_proteins, seqid_OG)
+
+# Step 5: infer LECA introns
+if not inference:
+    sys.exit()
+
 if shifts <= 3:
-    aa = 1
+    aa_shifts = 1
 else:
     if shifts%3 == 0:
-        aa = shifts/3
+        aa_shifts = shifts/3
     else:
-        aa =(shifts - shifts%3)/3 + 1 # 0-3 --> aa=1, 4-6 --> aa=2, 7-9 --> aa=3, ...
+        aa_shifts =(shifts - shifts%3)/3 + 1 # 0-3 --> aa=1, 4-6 --> aa=2, 7-9 --> aa=3, ...
 
-introns_shifts = {}
-dict_with_introns = {} # To be renamed
-gene_supergroup_dict ={}
-LECA_introns = {}
-dominant_phases = {}
-for OG, seqids in OG_dict.items():
-    gene_supergroup_dict[OG] = {}
-    dict_with_introns[OG] = {}
-    for seqid in seqids:
-        if seqid in location_introns:
-            position_intron = 0 #regulates that not every intron is checked every time.
-            location = 0
-            for position, character in enumerate(aligned_proteins[seqid]):
-                if character == "-":
-                    continue
-                location += 1
-                if position_intron < len(location_introns[seqid]):
-                    if location_introns[seqid][position_intron][1] == location:
-                        intron = location_introns[seqid][position_intron]
-                        position_intron += 1
-                        if position not in dict_with_introns[OG]:
-                            dict_with_introns[OG][position]=[[],[],[]]
-                        dict_with_introns[OG][position][intron[0]].append(seqid)
-
-    introns_shifts[OG] = {}
-    dominant_phases[OG] = {}
-    for position in dict_with_introns[OG]:
-        introns_shifts[OG][position] = []
-        dominant = dict_with_introns[OG][position][0]
-        dominant_phase = 0
-        if len(dict_with_introns[OG][position][1]) > len(dominant):
-            dominant = dict_with_introns[OG][position][1]
-            dominant_phase = 1
-        if len(dict_with_introns[OG][position][2]) > len(dominant):
-            dominant = dict_with_introns[OG][position][2]
-            dominant_phase = 2
-        dominant_phases[OG][position] = dominant_phase
-        for k in range(int(position-aa), int(position+aa) + 1, 1):  #k is just a variable looping through the list of numbers
-            if k in dict_with_introns[OG]:
-                introns_shifts[OG][position].extend(dict_with_introns[OG][k])
-            else:
-                introns_shifts[OG][position].extend([[],[],[]])
-        introns_shifts[OG][position] = introns_shifts[OG][position][int(3*aa+dominant_phase-shifts):int(3*aa+dominant_phase+shifts+1)]
-        for j in range(0, len(introns_shifts[OG][position]), 1):
-            if len(introns_shifts[OG][position][j]) > len(dominant):
-                #Assumption is that in the range defined there can only be 1 LECA intron and that if shift <3
-                #there can only be one dominant intron on 1 aa position.
-                del introns_shifts[OG][position]
-                #Selection: If near this position is a location with more introns, this location is deleted.
-                break
+introns_shifts = cluster_neighbouring_positions(aln_intron_positions, OG_dict, shifts, aa_shifts)
+for OG in OG_dict:
     for dominant_position in introns_shifts[OG]:
         gene_supergroup_dict[OG][dominant_position] = {"Amoebozoa" : [],"Obazoa" : [], "Excavata": [], "Archaeplastida": [], "RASH": []}
         frames = -1
