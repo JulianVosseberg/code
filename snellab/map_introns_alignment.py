@@ -10,6 +10,7 @@ import gzip
 from eukarya import supergroups5 as supergroups
 import csv
 import copy
+import time
 
 # Functions
 def parse_alignment(fasta_file):
@@ -17,15 +18,20 @@ def parse_alignment(fasta_file):
     OG_dict = {}
     aligned_proteins = {}
     alignment = ""
+    aln_length = None
     for line in fasta_file:
         line = line.rstrip()
         if line[0] == '>':
             if alignment != '':
                 aligned_proteins[seqid] = alignment
+                if aln_length is None:
+                    aln_length = len(alignment)
+                elif len(alignment) != aln_length:
+                    sys.exit('Error: not all aligned sequences have the same length! Analysis aborted.')
                 alignment = ''
-            parts = line.split('_')
-            OG = parts[0][1:]
-            seqid = parts[1]
+            sep = line.rfind('_')
+            OG = line[1:sep]
+            seqid = line[sep + 1:]
             species = seqid[:4]
             species_seqids_dict[species] = species_seqids_dict.get(species, []) + [seqid]
             OG_dict[OG] = OG_dict.get(OG, []) + [seqid]
@@ -33,23 +39,18 @@ def parse_alignment(fasta_file):
                 sys.stderr.write(f"Warning: {species} not recognised.\n")
         else:
             alignment += line
+    if aln_length is None:
+        sys.exit('Error: no sequences found in the alignment file! Analysis aborted.')
+    elif len(alignment) != aln_length:
+        sys.exit('Error: not all aligned sequences have the same length! Analysis aborted.')
     aligned_proteins[seqid] = alignment
     return species_seqids_dict, OG_dict, aligned_proteins
-
-def count_groups(seqids, supergroups, unique = True):
-    group_counts = {g : 0 for g in set(supergroups.values())}
-    species = [seqid[:4] for seqid in seqids]
-    if unique:
-        species = set(species)
-    for spec in species:
-        group_counts[supergroups[spec]] += 1
-    return group_counts
 
 def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
     seqid_coordinates = {}
     for species, seqids in species_seqids_dict.items():
         if species in ('BBRI', 'ESIL'):
-            sys.stderr.write(f"Warning: no CDS coordinates can be retrieved from the gff file for {species}.\n")
+            sys.stderr.write(f"Warning: no CDS coordinates can be retrieved from the GFF file for {species}.\n")
             continue
         if os.path.isfile(f'{euk_path}/data_set/gff_files/{species}.gff3.gz'):
             gff_file_name = f'{euk_path}/data_set/gff_files/{species}.gff3.gz'
@@ -59,7 +60,7 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
             sys.stderr.write(f'Warning: no GFF file found for {species}.\n')
             continue
         original_ids = {}
-        print(f'Reading metadata file for {species}...')
+        sys.stderr.write(f'Reading metadata file for {species}...\n')
         with open(f'{euk_path}/data_set/proteomes_metadata/{species}.metadata.txt') as metadata_file:
             metadata_file.readline()
             lines = csv.reader(metadata_file, delimiter = '\t')
@@ -113,7 +114,7 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
                                 except KeyError:
                                     pass
                                 break
-        print(f'Reading gff file for {species}...')
+        sys.stderr.write(f'Reading GFF file for {species}...\n')
         with gzip.open(gff_file_name) as gff_file:
             version3 = True
             if gff_file_name.endswith('gff.gz'):
@@ -151,7 +152,7 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
                     elif 'ID' in info_dict:
                         original_id = info_dict['ID']
                     else:
-                        sys.stderr.write(f'Error: elements in this line in the gff file for {species} not recognised:\n{line}\n')
+                        sys.stderr.write(f'Error: elements in this line in the GFF file for {species} not recognised:\n{line}\n')
                         break
                     if species == 'NGAD':
                         original_id = original_id.split(' ')[0]
@@ -172,8 +173,8 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
                             seqid_coordinates[eukarya_id] = [new_entry]
         for seqid in seqids:
             if seqid not in seqid_coordinates:
-                sys.stderr.write(f'Warning: {seqid} not detected in gff file.\n')
-        print('Done!')
+                sys.stderr.write(f'Warning: {seqid} not detected in GFF file.\n')
+        sys.stderr.write('Done!\n')
     return seqid_coordinates
 
 def map_introns_aa(euk_cds_dict, lengths):
@@ -182,7 +183,7 @@ def map_introns_aa(euk_cds_dict, lengths):
         # Check if all coding parts of one gene lie in the same direction
         directions = set([cds[-2] for cds in CDSs])
         if len(directions) != 1:
-            sys.exit(f"FATAL ERROR: the CDSs of {seqid} are not in the same direction.")
+            sys.stderr.write(f"Warning: the CDSs of {seqid} are not in the same direction. Excluded from analysis.\n")
         location_introns[seqid] = []
         length_without_introns = 0
         #location_introns = []
@@ -215,6 +216,15 @@ def map_introns_aa(euk_cds_dict, lengths):
             sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {lengths[seqid]} (aln). Excluded from analysis.\n')
             del location_introns[seqid]
     return location_introns
+
+def count_groups(seqids, supergroups, unique = True):
+    group_counts = {g : 0 for g in set(supergroups.values())}
+    species = [seqid[:4] for seqid in seqids]
+    if unique:
+        species = set(species)
+    for spec in species:
+        group_counts[supergroups[spec]] += 1
+    return group_counts
 
 def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
     aln_intron_positions = {}
@@ -281,7 +291,7 @@ def get_leca_introns(og_introns, supergroups, OG_group_species_count, OG_group_s
     for OG, positions in og_introns.items():
         leca_count[OG] = 0
         og_file = open(f'{outdir}/{OG}_introns.tsv', 'w')
-        group_order = [group for group in OG_group_species_count[OG]]
+        group_order = sorted(set(supergroups.values()))
         og_file.write('Position\tPhase\tLECA\tTotal species (%)\t')
         og_file.write('\t'.join([group + ' species' for group in group_order]) + '\t')
         og_file.write('Total sequences (%)\t')
@@ -356,7 +366,7 @@ parser.add_argument("alignment", help = 'protein alignment in fasta format')
 parser.add_argument('-o', metavar = 'outdir', help = 'directory for output files (default: current)')
 parser.add_argument('-e', metavar = 'eukarya_path', help = 'directory containing the Eukarya database (default: ~julian/julian2/snel-clan-genomes/eukarya)')
 parser.add_argument('-i', help = 'infer LECA introns and introns predating duplications (default: off)', action = 'store_true')
-parser.add_argument('-s', metavar = 'shifts', help = 'intron shift allowed (default: 0)', type = int, default = 0)
+parser.add_argument('-s', metavar = 'shifts', help = 'number of nucleotide shifts allowed for an intron (default: 0)', type = int, default = 0)
 parser.add_argument("-p", metavar = 'gene%', help = "percentage of genes in which an intron at least has to occur to call it a LECA intron (default: 7.5)", default = 7.5)
 parser.add_argument("-t", metavar = 'species%', help = "percentage of species in which an intron at least has to occur to call it a LECA intron (default: 15)", default = 15)
 parser.add_argument("-n", metavar = 'species', help = "minimum number of Opimoda and Diphoda species that should have an intron to call it a LECA intron (default: 2)", default = 2)
@@ -365,7 +375,8 @@ args = parser.parse_args()
 
 # To add: sequence ID --> paralogue table
 
-prefix = args.alignment[:args.alignment.find(".")]
+# Parse arguments
+prefix = os.path.basename(args.alignment).split('.')[0]
 if args.o:
     output_path = args.o
     if not os.path.isdir(output_path):
@@ -381,29 +392,47 @@ if args.i:
     inference = True
 shifts = args.s
 if shifts > 5:
-    sys.stderr(f"Warning: the number of shifts you want to tolerate ({shifts}) seems very high\n.")
+    sys.stderr.write(f"Warning: the number of shifts you want to tolerate ({shifts}) seems very high\n.")
 
 # Set thresholds for considering an intron a LECA intron
 threshold_percentage_genes = args.p # Intron has to be present in at least this many genes
 threshold_percentage_species = args.t # Intron has to be present in at least this many species
 threshold_species = args.n # Intron has to be present in at least X Opimoda (~unikont) and X Diphoda (~bikont) species
 
+info = f'Intron maper v1.0\nDeveloped by Sjoerd Gremmen, Michelle Schinkel and Julian Vosseberg.\nTime: {time.asctime()}\nCommand: {" ".join(sys.argv)}\n\n'
+if inference:
+    info += f'For LECA inference:\n-Shifts: {shifts}\n-Gene%: {threshold_percentage_genes}\n-Species%: {threshold_percentage_species}\n-Opimoda/Diphoda: {threshold_species}\n\n'
+sys.stderr.write(info)
+log = open(f'{output_path}/{prefix}.log', 'w')
+log.write(info)
+
 groups = set(supergroups.values())
-# Parse alignment and create species_seqids_dict
-# Obtain coordinates
 
 # Step 1: Parse input files
 
 # Parse alignment
+sys.stderr.write(f'Reading alignment file {args.alignment}...\n')
 with open(args.alignment) as fasta_file:
     species_seqids_dict, OG_dict, aligned_proteins = parse_alignment(fasta_file)
 lengths = {seqid : len(aln.replace('-', '')) for seqid, aln in aligned_proteins.items()}
+info = f'Alignment has {len(aligned_proteins)} sequences from {len(OG_dict)} OGs with {len(tuple(aligned_proteins.values())[0])} columns.\n'
+info += "\n".join([OG + ": " + str(len(seqids)) + " sequences" for OG, seqids in OG_dict.items()]) + '\n\n'
+sys.stderr.write(info)
+log.write(info)
 
 # Get CDS coordinates
+sys.stderr.write('Obtaining CDS coordinates...\n')
 euk_cds_dict = get_coordinates(species_seqids_dict)
+info = f'Intron location information for {len(euk_cds_dict)} / {len(aligned_proteins)} sequences.\n\n'
+sys.stderr.write(info)
+log.write(info)
 
 # Step 2: Map intron positions onto the proteins
+sys.stderr.write('Mapping intron positions onto the proteins...\n')
 location_introns = map_introns_aa(euk_cds_dict, lengths)
+info = f'Mapping successful for {len(location_introns)} / {len(euk_cds_dict)} sequences.\n\n'
+sys.stderr.write(info)
+log.write(info)
 OG_seq_info = {}
 for OG, seqs in OG_dict.items():
     OG_seq_info[OG] = []
@@ -414,6 +443,7 @@ OG_group_seq_count = {OG : count_groups(seqs, supergroups, unique = False) for O
 OG_group_species_count = {OG : count_groups(seqs, supergroups, unique = True) for OG, seqs in OG_seq_info.items()}
 
 # Step 3: Create sequence features file for viewing intron positions in Jalview
+sys.stderr.write('Creating Jalview sequence features file...\n')
 seqid_OG = {seqid : og for og, seqids in OG_dict.items() for seqid in seqids}
 with open(f'{output_path}/{prefix}_jalview.sff', 'w') as features_file:
     features_file.write('phase0\tgreen\nphase1\tblue\nphase2\tmagenta\nNA\tblack\n')
@@ -424,8 +454,10 @@ with open(f'{output_path}/{prefix}_jalview.sff', 'w') as features_file:
                 features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n')
         except KeyError:
             features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n')
+sys.stderr.write('Done!\n\n')
 
 # Step 4: Map intron positions onto the alignment
+sys.stderr.write('Mapping intron positions onto the alignment...\n')
 aln_intron_positions = map_introns_aln(location_introns, aligned_proteins, seqid_OG)
 with open(f'{output_path}/{prefix}_introns.tsv', 'w') as all_introns:
     all_introns.write('Positon\tPhase\tOG\tSequence IDs\n')
@@ -435,9 +467,11 @@ with open(f'{output_path}/{prefix}_introns.tsv', 'w') as all_introns:
                 if len(seqids) == 0:
                     continue
                 print(position, phase, OG, ','.join(seqids), sep = '\t', file = all_introns)
+sys.stderr.write(f'Written to {prefix}_introns.tsv!\n\n')
 
 # Step 5: infer LECA introns
 if inference:
+    sys.stderr.write('Inferring introns in LECA and reporting LECA introns shared between OGs...\n')
     # Calculate shifts and cluster neighbouring positions
     if shifts <= 3:
         aa_shifts = 1
@@ -447,10 +481,30 @@ if inference:
         else:
             aa_shifts =(shifts - shifts%3)/3 + 1 # 0-3 --> aa=1, 4-6 --> aa=2, 7-9 --> aa=3, ...
     introns_shifts = cluster_neighbouring_positions(aln_intron_positions, OG_dict, shifts, aa_shifts)
+
     # Infer intron positions/clusters present in LECA and make an analysis file per OG
     leca_introns, leca_count = get_leca_introns(introns_shifts, supergroups, OG_group_species_count, OG_group_seq_count, threshold_percentage_genes, threshold_percentage_species, threshold_species, output_path)
+    info = ' LECA intron(s) inferred.\n'
+    total = 0
+    for OG, leca_intron_count in leca_count.items():
+        info += f'{OG}: {leca_intron_count} LECA intron(s)\n'
+        total += leca_intron_count
+    info = str(total) + info
+    sys.stderr.write(info)
+    log.write(info)
+
     # Obtain shared LECA introns
     number_of_shared_introns = get_shared_leca_introns(leca_introns, shifts, aa_shifts)
+    info = f' / {total} LECA intron(s) shared between OGs.\n'
+    total = 0
+    for OG1, OG2s in number_of_shared_introns.items():
+        for OG2, count in OG2s.items():
+            if count > 0:
+                info += f'{OG1} - {OG2}: {count} shared LECA intron(s)\n'
+                total += count
+    info = str(total) + info
+    sys.stderr.write(info)
+    log.write(info)
 
     # Write output table
     with open(output_path + '/table.txt', 'w') as table:
@@ -472,3 +526,4 @@ if inference:
                         number_shared = number_of_shared_introns[OG2].get(OG1, 0)
                     table.write(f'\t{number_shared}')
             table.write('\n')
+log.close()
