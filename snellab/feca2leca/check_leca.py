@@ -11,18 +11,25 @@ parser = argparse.ArgumentParser(description = "This script checks if a set of s
 parser.add_argument("pfam", metavar = "Pfam", help = "the Pfam for which you want to check if it was in LECA")
 parser.add_argument("sequence_ids", metavar = "sequence_ID", nargs = '+', help = 'the sequences from the BBHs')
 parser.add_argument("-l", metavar = "0.xx", help = "coverage threshold for LECA calling (DEFAULT: 0.15)", type = float, default = 0.15)
+parser.add_argument("-s", metavar = "supergroups", help = "supergroups definition used", type = int, choices = (4, 5, 6), default = 5)
 args = parser.parse_args()
 
 prefix = args.pfam
 bbh_seqs = args.sequence_ids
 coverage_criterion = args.l
+if args.s == 5:
+    supergroups = supergroups5
+elif args.s == 4:
+    supergroups = supergroups4
+else:
+    supergroups = supergroups6
 
 with open(f'/home/julian/julian2/pfam_hmm/improved_pipeline/euk_fasta/{prefix}_seqids.list') as all_seqs_file:
     all_seqs = [line.rstrip() for line in all_seqs_file]
 representing, human_represent = assign_all_seqs(bbh_seqs, all_seqs, euk_only = True, prefix = prefix)
 human_seq_info = seq_info(['HSAP'])['HSAP']
 human_seqs = [seq for seq in all_seqs if 'HSAP' in seq]
-coverage, copy_no, species = infer_coverage_redundancy(bbh_seqs, representing, supergroups5, tree = False)
+coverage, copy_no, species = infer_coverage_redundancy(bbh_seqs, representing, supergroups, tree = False)
 if coverage <= coverage_criterion:
     sys.exit(f'No LECA in this Pfam. Coverage is {coverage}.')
 else:
