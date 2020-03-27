@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser(description = "This script checks if a set of s
 parser.add_argument("pfam", metavar = "Pfam", help = "the Pfam for which you want to check if it was in LECA")
 parser.add_argument("sequence_ids", metavar = "sequence_ID", nargs = '+', help = 'the sequences from the BBHs')
 parser.add_argument("-l", metavar = "0.xx", help = "coverage threshold for LECA calling (DEFAULT: 0.15)", type = float, default = 0.15)
+parser.add_argument("-r", metavar = "root", help = "position of eukaryotic root (DEFAULT: Opimoda-Diphoda)", default = "OD")
 parser.add_argument("-s", metavar = "supergroups", help = "supergroups definition used", type = int, choices = (4, 5, 6), default = 5)
 args = parser.parse_args()
 
@@ -23,6 +24,10 @@ elif args.s == 4:
     supergroups = supergroups4
 else:
     supergroups = supergroups6
+root_daughters = get_root_daughters(args.r, supergroups4)
+root_groups = set([root_daughters[seq[:4]] for seq in bbh_seqs])
+if len(root_groups) != 2:
+    sys.exit(f'No LECA in this Pfam. Only {tuple(root_groups)[0]} BBH sequences.')
 
 with open(f'/home/julian/julian2/pfam_hmm/improved_pipeline/euk_fasta/{prefix}_seqids.list') as all_seqs_file:
     all_seqs = [line.rstrip() for line in all_seqs_file]
