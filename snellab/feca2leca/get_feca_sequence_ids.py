@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import os
 from subprocess import PIPE, Popen, call
 
 pfam = sys.argv[1]
@@ -14,6 +15,10 @@ if groups == "2":
     path_to_files = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/separate/' + pfam + '/'
 elif groups == "5":
     path_to_files = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/2_bbhs_5_groups/4_ete_analysis/d20_l15/separate/' + pfam + '/'
+elif groups == 'r2':
+    path_to_files = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/5_ete_analysis/bbhs_2_groups/' + pfam + '/'
+    if not os.path.exists(path_to_files):
+        path_to_files = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/separate/' + pfam + '/'
 else:
     sys.exit("Error: groups not recognised!")
 fecas = {}
@@ -73,7 +78,7 @@ for mfeca, content in mfecas.items():
             except KeyError:
                 mfecas_seqs[mfeca] = fecas[feca]
 
-if groups == "2":
+if groups == "2" or groups == 'r2':
     fasta = '/home/julian/julian2/pfam_hmm/improved_pipeline/combined/2_groups/' + pfam + '_2_groups.fa'
 else:
     fasta = '/home/julian/julian2/pfam_hmm/improved_pipeline/combined/5_groups/' + pfam + '_5_groups.fa'

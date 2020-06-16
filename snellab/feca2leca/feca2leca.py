@@ -143,7 +143,7 @@ Note: if there is only one prokaryotic leaf, this one will be removed."""
     return pruned
 
 def feca2leca(leaves):
-    """Determines if clade fulfills FECA-2-LECA criteria: both Opimoda and Diphoda present"""
+    """Determines if clade fulfills FECA-2-LECA criteria: both sides of the root present"""
     root_daughter_groups = set()
     for leaf in leaves:
         root_daughter_groups.add(leaf.root_daughter)

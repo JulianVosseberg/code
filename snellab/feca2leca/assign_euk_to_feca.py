@@ -11,6 +11,8 @@ if groups == '2':
     path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/'
 elif groups == '5':
     path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/2_bbhs_5_groups/4_ete_analysis/d20_l15/'
+elif groups == 'r2':
+    path = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/5_ete_analysis/bbhs_2_groups/'
 else:
     sys.exit("Please provide a valid argument: 2 (2 groups) or 5 (5 groups)")
 
@@ -68,6 +70,8 @@ for pfam, clan in pfam_clan.items():
 
 if groups == '2':
     assign_path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/5_assign_euk_clan/d20_l15/'
+elif groups == 'r2':
+    assign_path = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/6_assign_euk_clan/bbhs_2_groups/'
 else:
     assign_path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/2_bbhs_5_groups/5_assign_euk_clan/d20_l15/'
 outfile = open(assign_path + 'clan_pfams.tsv', 'w')

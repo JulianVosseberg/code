@@ -13,11 +13,13 @@ parser.add_argument("sequence_ids", metavar = "sequence_ID", nargs = '+', help =
 parser.add_argument("-l", metavar = "0.xx", help = "coverage threshold for LECA calling (DEFAULT: 0.15)", type = float, default = 0.15)
 parser.add_argument("-r", metavar = "root", help = "position of eukaryotic root (DEFAULT: Opimoda-Diphoda)", default = "OD")
 parser.add_argument("-s", metavar = "supergroups", help = "supergroups definition used", type = int, choices = (4, 5, 6), default = 5)
+parser.add_argument('-o', metavar = 'outdir', help = 'directory for output files (DEFAULT: current)', default = '.')
 args = parser.parse_args()
 
 prefix = args.pfam
 bbh_seqs = args.sequence_ids
 coverage_criterion = args.l
+outdir = args.o
 if args.s == 5:
     supergroups = supergroups5
 elif args.s == 4:
@@ -38,7 +40,7 @@ coverage, copy_no, species = infer_coverage_redundancy(bbh_seqs, representing, s
 if coverage <= coverage_criterion:
     sys.exit(f'No LECA in this Pfam. Coverage is {coverage}.')
 else:
-    with open(f'{prefix}_lecas.tsv', 'w') as lecas_out:
+    with open(f'{outdir}/{prefix}_lecas.tsv', 'w') as lecas_out:
         lecas_out.write('Pfam\tFECA\tAncestry\tLECA\tSupport\tCoverage\tCopy number\tHuman seqs\tHuman name\tSeqs\n')
         if len(human_represent) > 0:
             human_seqs, leca_human = get_human_representing(bbh_seqs, human_seqs, human_represent, human_seq_info)
