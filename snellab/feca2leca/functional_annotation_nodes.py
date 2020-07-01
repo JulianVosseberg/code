@@ -30,6 +30,19 @@ def get_annotation(seqs, seqs_function, group):
     else: # Just one function
         return function
 
+ete_path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/'
+assign_path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/5_assign_euk_clan/d20_l15/'
+out_path = '/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/6_functional_annotation/'
+if len(sys.argv) > 1:
+    if sys.argv[1] == "revision":
+        ete_path = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/5_ete_analysis/bbhs_2_groups/'
+        assign_path = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/6_assign_euk_clan/bbhs_2_groups/'
+        out_path = '/home/julian/julian2/timing_dupl/6_nee_revision/1_kclust_incl_asgard/7_functional_annotation/'
+    elif sys.argv[1] == "original":
+        pass
+    else:
+        sys.exit(f"Error: argument '{sys.argv[1]}' not recognised.")
+
 interest_ids = {
 'GO:0005576' : 'extracellular region',
 'GO:0005618' : 'cell wall',
@@ -64,7 +77,7 @@ with open('/home/julian/julian2/eggnog4/eukarya_4.0.2/eukarya_4.0.2.emapper.anno
             seqs_function[seq]['Localisation'] = [go_term for go_term in go_terms.split(',') if go_term in interest_ids]
 
 og_function = {}
-with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/lecas.tsv') as lecas_file:
+with open(ete_path + 'lecas.tsv') as lecas_file:
     lecas_file.readline()
     for line in lecas_file:
         line = line.rstrip()
@@ -79,7 +92,7 @@ with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_
 
 # Integrate the localisation annotation for the LECAs with the duplication information
 prok_euk_pattern = re.compile('(PF\d{5}_FECA[\d_]+)_(PF.+)')
-with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/5_assign_euk_clan/d20_l15/merged_pfams.tsv') as duplication_info_file:
+with open(assign_path + 'merged_pfams.tsv') as duplication_info_file:
     duplication_info_file.readline()
     for line in duplication_info_file:
         line = line.rstrip()
@@ -116,14 +129,14 @@ with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_
                 og_function[pfam][og]['Ancestry'] = ancestry
                 og_function[pfam][og]['Duplicated'] = duplicated
 
-with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/6_functional_annotation/lecas.tsv', 'w') as lecas_file:
+with open(out_path + 'lecas.tsv', 'w') as lecas_file:
     lecas_file.write('Pfam\tOG\tAncestry\tDuplicated\tFunction\tLocalisation\n')
     for pfam, ogs in og_function.items():
         for og, og_info in ogs.items():
             lecas_file.write(f'{pfam}\t{og}\t{og_info["Ancestry"]}\t{og_info["Duplicated"]}\t{og_info["Function"]}\t{interest_ids.get(og_info["Localisation"], "NA")}\n')
 
 # Function duplication nodes
-with open(f'/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/4_ete_analysis/d20_l15/duplication_lengths.tsv') as dupl_file:
+with open(ete_path + 'duplication_lengths.tsv') as dupl_file:
     dupl_annotation = {}
     dupl_file.readline()
     for line in dupl_file:
@@ -217,7 +230,7 @@ with open(f'/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2
                 #sys.stderr.write(f'Warning: ancestral localisation for {dupl} unclear.\n')
                 dupl_annotation[pfam][dupl]['Localisation'] = 'NA'
 
-with open('/home/julian/julian2/timing_dupl/4_phylogeny_pfam_pipeline2/1_bbhs_2_groups/6_functional_annotation/duplications.tsv', 'w') as dupl_output:
+with open(out_path + 'duplications.tsv', 'w') as dupl_output:
     dupl_output.write('Pfam\tDuplication\tFunction\tLocalisation\tDl\n')
     for pfam, duplications in dupl_annotation.items():
         for duplication, info in duplications.items():
