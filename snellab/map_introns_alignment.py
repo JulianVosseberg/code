@@ -14,6 +14,10 @@ import time
 
 # Functions
 def parse_alignment(fasta_file):
+    """Parses an alignment in fasta file format and returns:
+    - a dictionary with per species the sequence IDs;
+    - a dictionary with per OG the sequence IDs;
+    - a dictionary with per sequence ID the alignment."""
     species_seqids_dict = {}
     OG_dict = {}
     aligned_proteins = {}
@@ -47,6 +51,8 @@ def parse_alignment(fasta_file):
     return species_seqids_dict, OG_dict, aligned_proteins
 
 def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
+    """Matches the Eukarya 4 ID with the original ID and extracts the CDS coordinates from the GFF file.
+Returns a dictionary with for each sequence ID all exons with their start and stop coordinates, orientation (+/-) and phase."""
     seqid_coordinates = {}
     for species, seqids in species_seqids_dict.items():
         if species in ('BBRI', 'ESIL'):
@@ -178,6 +184,8 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
     return seqid_coordinates
 
 def map_introns_aa(euk_cds_dict, lengths):
+    """Calculates the locations of the introns in the amino acids upon performing some checks.
+Returns a dictionary with per sequence ID the phases and amino acid positions of the introns."""
     location_introns = {}
     for seqid, CDSs in euk_cds_dict.items():
         # Check if all coding parts of one gene lie in the same direction
@@ -218,6 +226,7 @@ def map_introns_aa(euk_cds_dict, lengths):
     return location_introns
 
 def count_groups(seqids, supergroups, unique = True):
+    "Counts the number of species in each supergroup covered."
     group_counts = {g : 0 for g in set(supergroups.values())}
     species = [seqid[:4] for seqid in seqids]
     if unique:
@@ -227,6 +236,8 @@ def count_groups(seqids, supergroups, unique = True):
     return group_counts
 
 def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
+    """Maps the intron locations onto the alignment.
+Returns a dictionary with per position and phase the sequences with an intron at that position and phase."""
     aln_intron_positions = {}
     for seqid, introns in location_introns.items():
         if len(introns) == 0:
@@ -259,6 +270,8 @@ def map_introns_aln(location_introns, aligned_proteins, seqid_OG):
     return aln_intron_positions
 
 def cluster_neighbouring_positions(aln_intron_positions, OG_dict, nt_shifts, aa_shifts):
+    """To allow for possible intron shifts neighbouring intron positions are clustered. The focal intron is the one with most sequences.
+Returns a dictionary with for each OG, position and phase the (neighbouring) sequences with introns."""
     introns_shifts = {}
     for OG, aa_positions in aln_intron_positions.items():
         introns_shifts[OG] = {}
@@ -286,6 +299,8 @@ def cluster_neighbouring_positions(aln_intron_positions, OG_dict, nt_shifts, aa_
     return introns_shifts
 
 def get_leca_introns(og_introns, supergroups, OG_group_species_count, OG_group_seq_count, threshold_percentage_genes, threshold_percentage_species, threshold_species, outdir):
+    """Infers for each OG which introns were in LECA. Separate files for each OG with the intron information are created.
+Returns a dictionary with for each OG the position and phase of the LECA introns and a dictionary with for each OG the number of LECA introns."""
     leca_introns = {}
     leca_count = {}
     for OG, positions in og_introns.items():
@@ -318,12 +333,15 @@ def get_leca_introns(og_introns, supergroups, OG_group_species_count, OG_group_s
                         else:
                             leca_introns[OG][position] = [phase]
                 print(position, phase, leca, round(spec_cov, 1), sep = '\t', end = '', file = og_file)
-                for group, total in OG_group_species_count[OG].items():
+                for group in group_order:
+                    total = OG_group_species_count[OG][group]
                     if total != 0:
                         og_file.write(f'\t{round(group_species_counts[group] / total * 100, 1)}')
                     else:
                         og_file.write('\tNA')
-                for group, total in OG_group_seq_count[OG].items():
+                og_file.write(f'\t{round(seq_cov, 1)}')
+                for group in group_order:
+                    total = OG_group_seq_count[OG][group]
                     if total != 0:
                         og_file.write(f'\t{round(group_seq_counts[group] / total * 100, 1)}')
                     else:
@@ -333,6 +351,8 @@ def get_leca_introns(og_introns, supergroups, OG_group_species_count, OG_group_s
     return leca_introns, leca_count
 
 def get_shared_leca_introns(leca_introns, nt_shifts, aa_shifts):
+    """LECA introns shared between different OGs are identified. Potential shifts are taken into account.
+Returns a dictionary with for each pair of OGs the number of shared introns."""
     OGs = leca_introns.keys()
     number_of_shared_introns = {}
     for i in range(len(OGs) - 1):
@@ -501,7 +521,7 @@ if inference:
         for OG2, count in OG2s.items():
             if count > 0:
                 info += f'{OG1} - {OG2}: {count} shared LECA intron(s)\n'
-                total += count
+                total += count * 2
     info = str(total) + info
     sys.stderr.write(info)
     log.write(info)
