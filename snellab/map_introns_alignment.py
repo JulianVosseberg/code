@@ -11,9 +11,20 @@ from eukarya import supergroups5 as supergroups
 import csv
 import copy
 import time
+import re
 
 # Functions
-def parse_alignment(fasta_file):
+def get_domain_positions(coord_file):
+    "Extracts domain coordinates from file."
+    domainid_coord = {}
+    for line in coord_file:
+        line = line.rstrip()
+        domainid, hits = line.split('\t')
+        coord = [[int(x) for x in hit.split('..')] for hit in hits.split(',')]
+        domainid_coord[domainid] = coord
+    return domainid_coord
+
+def parse_alignment(fasta_file, domain = False):
     """Parses an alignment in fasta file format and returns:
     - a dictionary with per species the sequence IDs;
     - a dictionary with per OG the sequence IDs;
@@ -23,22 +34,36 @@ def parse_alignment(fasta_file):
     aligned_proteins = {}
     alignment = ""
     aln_length = None
+    if domain:
+        pattern = re.compile(">(.+)_((([A-Z]{4})\d{6}).*)")
+        seqid_domainids = {}
+    else:
+        pattern = re.compile(">(.+)_(([A-Z]{4})\d{6})")
     for line in fasta_file:
         line = line.rstrip()
         if line[0] == '>':
             if alignment != '':
-                aligned_proteins[seqid] = alignment
+                if domain:
+                    aligned_proteins[domainid] = alignment
+                else:
+                    aligned_proteins[seqid] = alignment
                 if aln_length is None:
                     aln_length = len(alignment)
                 elif len(alignment) != aln_length:
                     sys.exit('Error: not all aligned sequences have the same length! Analysis aborted.')
                 alignment = ''
-            sep = line.rfind('_')
-            OG = line[1:sep]
-            seqid = line[sep + 1:]
-            species = seqid[:4]
+            match = re.match(pattern, line)
+            if match is None:
+                sys.exit('Error: FASTA headers not in the right format (<OG>_<Eukarya4ID>(<suffix>))')
+            if domain:
+                OG, domainid, seqid, species = match.groups()
+                OG_dict[OG] = OG_dict.get(OG, []) + [domainid]
+                if domainid != seqid:
+                    seqid_domainids[seqid] = seqid_domainids.get(seqid, []) + [domainid]
+            else:
+                OG, seqid, species = match.groups()
+                OG_dict[OG] = OG_dict.get(OG, []) + [seqid]
             species_seqids_dict[species] = species_seqids_dict.get(species, []) + [seqid]
-            OG_dict[OG] = OG_dict.get(OG, []) + [seqid]
             if species not in supergroups:
                 sys.stderr.write(f"Warning: {species} not recognised.\n")
         else:
@@ -48,6 +73,8 @@ def parse_alignment(fasta_file):
     elif len(alignment) != aln_length:
         sys.exit('Error: not all aligned sequences have the same length! Analysis aborted.')
     aligned_proteins[seqid] = alignment
+    if domain:
+        return species_seqids_dict, OG_dict, aligned_proteins, seqid_domainids
     return species_seqids_dict, OG_dict, aligned_proteins
 
 def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
@@ -183,7 +210,7 @@ Returns a dictionary with for each sequence ID all exons with their start and st
         sys.stderr.write('Done!\n')
     return seqid_coordinates
 
-def map_introns_aa(euk_cds_dict, lengths):
+def map_introns_aa(euk_cds_dict, lengths, domainid_coord = None, seqid_domainids = None):
     """Calculates the locations of the introns in the amino acids upon performing some checks.
 Returns a dictionary with per sequence ID the phases and amino acid positions of the introns."""
     location_introns = {}
@@ -192,9 +219,13 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
         directions = set([cds[-2] for cds in CDSs])
         if len(directions) != 1:
             sys.stderr.write(f"Warning: the CDSs of {seqid} are not in the same direction. Excluded from analysis.\n")
-        location_introns[seqid] = []
+        if domainid_coord is None:
+            location_introns[seqid] = []
+        else:
+            domainids = seqid_domainids.get(seqid, [seqid])
+            for domainid in domainids:
+                location_introns[domainid] = []
         length_without_introns = 0
-        #location_introns = []
         startcds = CDSs[0][0]
         stopcds = CDSs[-1][1] #-1 needed for counting in python
         # Some of the minus directed CDSs needed to be reversed.
@@ -215,14 +246,25 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
             length_without_introns += intron_information[1] - intron_information[0] + 1
             phase = length_without_introns % 3
             location_intron = int((length_without_introns - phase)/3 + 1)
-            location_introns[seqid].append([phase, location_intron])
+            if domainid_coord is None:
+                location_introns[seqid].append([phase, location_intron])
+            else:
+                for domainid in domainids:
+                    cum_gap_length = 0
+                    pr_end = 0
+                    for start, end in domainid_coord[domainid]:
+                        cum_gap_length += start - pr_end - 1
+                        if end >= location_intron >= start:
+                            location_introns[domainid].append([phase, location_intron - cum_gap_length])
+                        pr_end = end
         length_without_introns += CDSs[-1][1] - CDSs[-1][0] + 1
         # everything is devided by three, from length of mRNA (nucleotides) to polypeptide length (amino acid).
         if length_without_introns%3 != 0:
             sys.stderr.write(f"Warning: {seqid} seems to be incorrectly annotated.\n") #A small check if the genes are correctly annotated
-        if not (length_without_introns // 3 == lengths[seqid] or length_without_introns // 3 == lengths[seqid] + 1):
-            sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {lengths[seqid]} (aln). Excluded from analysis.\n')
-            del location_introns[seqid]
+        if domainid_coord is None:
+            if not (length_without_introns // 3 == lengths[seqid] or length_without_introns // 3 == lengths[seqid] + 1):
+                sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {lengths[seqid]} (aln). Excluded from analysis.\n')
+                del location_introns[seqid]
     return location_introns
 
 def count_groups(seqids, supergroups, unique = True):
@@ -314,9 +356,11 @@ Returns a dictionary with for each OG the position and phase of the LECA introns
         spec_total = sum(OG_group_species_count[OG].values())
         seq_total = sum(OG_group_seq_count[OG].values())
         leca_introns[OG] = {}
-        for position, phases in positions.items():
+        sorted_positions = sorted(positions)
+        for position in sorted_positions:
+            phases = positions[position]
             for phase, seqids in phases.items():
-                seqids = [seqid for seqids in introns_shifts[OG][position][phase] for seqid in seqids]
+                seqids = [seqid for seqids in og_introns[OG][position][phase] for seqid in seqids]
                 group_species_counts = count_groups(seqids, supergroups, unique = True)
                 opimoda = group_species_counts['Amoebozoa'] + group_species_counts['Obazoa']
                 diphoda = sum(group_species_counts.values()) - opimoda
@@ -390,7 +434,7 @@ parser.add_argument('-s', metavar = 'shifts', help = 'number of nucleotide shift
 parser.add_argument("-p", metavar = 'gene%', help = "percentage of genes in which an intron at least has to occur to call it a LECA intron (default: 7.5)", default = 7.5)
 parser.add_argument("-t", metavar = 'species%', help = "percentage of species in which an intron at least has to occur to call it a LECA intron (default: 15)", default = 15)
 parser.add_argument("-n", metavar = 'species', help = "minimum number of Opimoda and Diphoda species that should have an intron to call it a LECA intron (default: 2)", default = 2)
-#parser.add_argument('-d', metavar = 'domains', help = 'Pfam domains instead of full-length genes', action = 'store_true')
+parser.add_argument('-d', metavar = 'domains', help = 'coordinates file (<seqid>\\t<start>..<end>(,<start>..<end>,..) for domains instead of full-length genes')
 args = parser.parse_args()
 
 # To add: sequence ID --> paralogue table
@@ -413,6 +457,9 @@ if args.i:
 shifts = args.s
 if shifts > 5:
     sys.stderr.write(f"Warning: the number of shifts you want to tolerate ({shifts}) seems very high\n.")
+domain = False
+if args.d:
+    domain = True
 
 # Set thresholds for considering an intron a LECA intron
 threshold_percentage_genes = args.p # Intron has to be present in at least this many genes
@@ -429,11 +476,18 @@ log.write(info)
 groups = set(supergroups.values())
 
 # Step 1: Parse input files
+if domain:
+    sys.stderr.write(f'Reading coordinates file {args.d}...\n')
+    with open(args.d) as coord_file:
+        domainid_coord = get_domain_positions(coord_file)
 
 # Parse alignment
 sys.stderr.write(f'Reading alignment file {args.alignment}...\n')
 with open(args.alignment) as fasta_file:
-    species_seqids_dict, OG_dict, aligned_proteins = parse_alignment(fasta_file)
+    if domain:
+        species_seqids_dict, OG_dict, aligned_proteins, seqid_domainids = parse_alignment(fasta_file, domain = True)
+    else:
+        species_seqids_dict, OG_dict, aligned_proteins = parse_alignment(fasta_file)
 lengths = {seqid : len(aln.replace('-', '')) for seqid, aln in aligned_proteins.items()}
 info = f'Alignment has {len(aligned_proteins)} sequences from {len(OG_dict)} OGs with {len(tuple(aligned_proteins.values())[0])} columns.\n'
 info += "\n".join([OG + ": " + str(len(seqids)) + " sequences" for OG, seqids in OG_dict.items()]) + '\n\n'
@@ -443,14 +497,26 @@ log.write(info)
 # Get CDS coordinates
 sys.stderr.write('Obtaining CDS coordinates...\n')
 euk_cds_dict = get_coordinates(species_seqids_dict)
-info = f'Intron location information for {len(euk_cds_dict)} / {len(aligned_proteins)} sequences.\n\n'
+if domain:
+    info = f'Intron location information for {len(euk_cds_dict)} / {len(set([seqid for sp in species_seqids_dict.values() for seqid in sp]))} full-length sequences.\n\n'
+else:
+    info = f'Intron location information for {len(euk_cds_dict)} / {len(aligned_proteins)} sequences.\n\n'
 sys.stderr.write(info)
 log.write(info)
 
 # Step 2: Map intron positions onto the proteins
 sys.stderr.write('Mapping intron positions onto the proteins...\n')
-location_introns = map_introns_aa(euk_cds_dict, lengths)
-info = f'Mapping successful for {len(location_introns)} / {len(euk_cds_dict)} sequences.\n\n'
+if domain:
+    location_introns = map_introns_aa(euk_cds_dict, None, domainid_coord, seqid_domainids)
+    extra = 0
+    for seqid, domainids in seqid_domainids.items():
+        if len(domainids) > 1:
+            if seqid in euk_cds_dict:
+                extra += 1
+    info = f'Mapping successful for {len(location_introns)} / {len(euk_cds_dict) + extra} sequences.\n\n'
+else:
+    location_introns = map_introns_aa(euk_cds_dict, lengths)
+    info = f'Mapping successful for {len(location_introns)} / {len(euk_cds_dict)} sequences.\n\n'
 sys.stderr.write(info)
 log.write(info)
 OG_seq_info = {}
@@ -482,7 +548,9 @@ aln_intron_positions = map_introns_aln(location_introns, aligned_proteins, seqid
 with open(f'{output_path}/{prefix}_introns.tsv', 'w') as all_introns:
     all_introns.write('Positon\tPhase\tOG\tSequence IDs\n')
     for OG, positions in aln_intron_positions.items():
-        for position, phases in positions.items():
+        sorted_positions = sorted(positions)
+        for position in sorted_positions:
+            phases = positions[position]
             for phase, seqids in enumerate(phases):
                 if len(seqids) == 0:
                     continue
