@@ -526,9 +526,10 @@ for OG, seqs in OG_dict.items():
 OG_group_seq_count = {OG : count_groups(seqs, supergroups, unique = False) for OG, seqs in OG_seq_info.items()}
 OG_group_species_count = {OG : count_groups(seqs, supergroups, unique = True) for OG, seqs in OG_seq_info.items()}
 
-# Step 3: Create sequence features file for viewing intron positions in Jalview
+# Step 3a: Create sequence features file for viewing intron positions in Jalview
 sys.stderr.write('Creating Jalview sequence features file...\n')
 seqid_OG = {seqid : og for og, seqids in OG_dict.items() for seqid in seqids}
+seqid_introns = {}
 with open(f'{output_path}/{prefix}_jalview.sff', 'w') as features_file:
     features_file.write('phase0\tgreen\nphase1\tblue\nphase2\tmagenta\nNA\tblack\n')
     for seqid in aligned_proteins:
@@ -536,8 +537,19 @@ with open(f'{output_path}/{prefix}_jalview.sff', 'w') as features_file:
             introns = location_introns[seqid]
             for phase, position in introns:
                 features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t{position}\t{position}\tphase{phase}\t\n')
+                seqid_introns[seqid] = seqid_introns.get(seqid, []) + [str((position - 1)*3 + phase)]
         except KeyError:
             features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n')
+sys.stderr.write('Done!\n\n')
+
+# Step 3b: Create alignment file containing intron information for Malin
+sys.stderr.write('Adding intron locations to alignment file...\n')
+with open(f'{output_path}/{prefix}.introns.aln', 'w') as introns_aln:
+    for seqid, alignment in aligned_proteins.items():
+        introns = ",".join(seqid_introns.get(seqid, []))
+        introns_aln.write(f'>{seqid_OG[seqid]}_{seqid} /organism={seqid[:4]} {{i {introns} i}}\n')
+        for i in range(0, len(alignment), 60):
+            introns_aln.write(alignment[i:i+60] + '\n')
 sys.stderr.write('Done!\n\n')
 
 # Step 4: Map intron positions onto the alignment
