@@ -110,8 +110,6 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                         original_id = original_id.replace('-RA', '-tr')
                     elif species == 'AGAM':
                         original_id = original_id.replace('-RA', '-PA')
-                    elif species == 'KFLA':
-                        original_id += '.CDS'
                     elif species in ('LCOR', 'MVER'):
                         original_id = 'mRNA_' + original_id
                     elif species in ('CVEL', 'GINT'):
