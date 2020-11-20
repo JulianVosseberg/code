@@ -72,9 +72,11 @@ def parse_alignment(fasta_file, domain = False):
         sys.exit('Error: no sequences found in the alignment file! Analysis aborted.')
     elif len(alignment) != aln_length:
         sys.exit('Error: not all aligned sequences have the same length! Analysis aborted.')
-    aligned_proteins[seqid] = alignment
+    # Add last sequence and return output
     if domain:
+        aligned_proteins[domainid] = alignment
         return species_seqids_dict, OG_dict, aligned_proteins, seqid_domainids
+    aligned_proteins[seqid] = alignment
     return species_seqids_dict, OG_dict, aligned_proteins
 
 def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
@@ -217,12 +219,7 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
         directions = set([cds[-2] for cds in CDSs])
         if len(directions) != 1:
             sys.stderr.write(f"Warning: the CDSs of {seqid} are not in the same direction. Excluded from analysis.\n")
-        if domainid_coord is None:
-            location_introns[seqid] = []
-        else:
-            domainids = seqid_domainids.get(seqid, [seqid])
-            for domainid in domainids:
-                location_introns[domainid] = []
+            continue
         length_without_introns = 0
         startcds = CDSs[0][0]
         stopcds = CDSs[-1][1] #-1 needed for counting in python
@@ -234,11 +231,19 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
             start_phase = int(CDSs[0][3])
         except ValueError:
             sys.stderr.write(f'Warning: no start phase detected for {seqid}. Excluded from analysis.\n')
+            continue
         if start_phase != 0:
             if directions == {'-'}:
                 CDSs[0][1] += 3 - start_phase
             else:
                 CDSs[0][0] -= 3 - start_phase
+        # Initialise list
+        if domainid_coord is None:
+            location_introns[seqid] = []
+        else:
+            domainids = seqid_domainids.get(seqid, [seqid])
+            for domainid in domainids:
+                location_introns[domainid] = []
         # Loop through CDSs, excluding the last to prevent the end of protein being seen as intron, and add to list.
         for intron_information in CDSs[:-1]:
             length_without_introns += intron_information[1] - intron_information[0] + 1
@@ -510,7 +515,7 @@ if domain:
     for seqid, domainids in seqid_domainids.items():
         if len(domainids) > 1:
             if seqid in euk_cds_dict:
-                extra += 1
+                extra += len(domainids) - 1
     info = f'Mapping successful for {len(location_introns)} / {len(euk_cds_dict) + extra} sequences.\n\n'
 else:
     location_introns = map_introns_aa(euk_cds_dict, lengths)
