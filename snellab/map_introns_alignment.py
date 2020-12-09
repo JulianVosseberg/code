@@ -617,8 +617,8 @@ if inference:
 
     # Write output table
     with open(output_path + '/table.txt', 'w') as table:
-        table.write('\t' + '\t'.join(OG_dict.keys()) + '\n')
-        OGs = list(OG_dict.keys())
+        OGs = [OG for OG in OG_dict if OG in leca_count]
+        table.write('\t' + '\t'.join(OGs) + '\n')
         for i, OG1 in enumerate(OGs):
             table.write(OG1)
             for j in range(i + 1):
