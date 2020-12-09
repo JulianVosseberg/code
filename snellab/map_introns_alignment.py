@@ -83,19 +83,22 @@ def get_coordinates(species_seqids_dict, euk_path = '/home/julian/julian2/snel-c
     """Matches the Eukarya 4 ID with the original ID and extracts the CDS coordinates from the GFF file.
 Returns a dictionary with for each sequence ID all exons with their start and stop coordinates, orientation (+/-) and phase."""
     seqid_coordinates = {}
+    species_count = 0
     for species, seqids in species_seqids_dict.items():
+        species_count += 1
+        sys.stderr.write(f'\r{species_count:3} / {len(species_seqids_dict)} species files parsing...')
         if species in ('BBRI', 'ESIL'):
-            sys.stderr.write(f"Warning: no CDS coordinates can be retrieved from the GFF file for {species}.\n")
+            sys.stderr.write(f"\nWarning: no CDS coordinates can be retrieved from the GFF file for {species}.\n")
             continue
         if os.path.isfile(f'{euk_path}/data_set/gff_files/{species}.gff3.gz'):
             gff_file_name = f'{euk_path}/data_set/gff_files/{species}.gff3.gz'
         elif os.path.isfile(f'{euk_path}/data_set/gff_files/{species}.gff.gz'):
             gff_file_name = f'{euk_path}/data_set/gff_files/{species}.gff.gz'
         else:
-            sys.stderr.write(f'Warning: no GFF file found for {species}.\n')
+            sys.stderr.write(f'\nWarning: no GFF file found for {species}.\n')
             continue
         original_ids = {}
-        sys.stderr.write(f'Reading metadata file for {species}...\n')
+        #sys.stderr.write(f'Reading metadata file for {species}...\n')
         with open(f'{euk_path}/data_set/proteomes_metadata/{species}.metadata.txt') as metadata_file:
             metadata_file.readline()
             lines = csv.reader(metadata_file, delimiter = '\t')
@@ -124,7 +127,7 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                 if len(original_ids) == len(set(seqids)):
                     break
             else:
-                sys.stderr.write(f'Warning: not all sequence IDs for {species} found in metadata file.\n')
+                sys.stderr.write(f'\nWarning: not all sequence IDs for {species} found in metadata file.\n')
         if species in ('SPLU', 'CANG', 'MLAR', 'LTRA', 'ODIO'):
             with gzip.open(gff_file_name) as gff_file:
                 for line in gff_file:
@@ -147,7 +150,7 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                                 except KeyError:
                                     pass
                                 break
-        sys.stderr.write(f'Reading GFF file for {species}...\n')
+        #sys.stderr.write(f'Reading GFF file for {species}...\n')
         with gzip.open(gff_file_name) as gff_file:
             version3 = True
             if gff_file_name.endswith('gff.gz'):
@@ -185,7 +188,7 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                     elif 'ID' in info_dict:
                         original_id = info_dict['ID']
                     else:
-                        sys.stderr.write(f'Error: elements in this line in the GFF file for {species} not recognised:\n{line}\n')
+                        sys.stderr.write(f'\nError: elements in this line in the GFF file for {species} not recognised:\n{line}\n')
                         break
                     if species == 'NGAD':
                         original_id = original_id.split(' ')[0]
@@ -206,8 +209,8 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                             seqid_coordinates[eukarya_id] = [new_entry]
         for seqid in seqids:
             if seqid not in seqid_coordinates:
-                sys.stderr.write(f'Warning: {seqid} not detected in GFF file.\n')
-        sys.stderr.write('Done!\n')
+                sys.stderr.write(f'\nWarning: {seqid} not detected in GFF file.\n')
+        #sys.stderr.write('Done!\n')
     return seqid_coordinates
 
 def map_introns_aa(euk_cds_dict, lengths, domainid_coord = None, seqid_domainids = None):
@@ -311,7 +314,7 @@ Returns a dictionary with per position and phase the sequences with an intron at
                 continue
             break
         else:
-            sys.stderr.write(f'Not all intron positions for {seqid} found in the alignment.\n')
+            sys.stderr.write(f'Not all intron positions for {seqid} found in the alignment. It is probably an intron in the stop codon.\n')
     return aln_intron_positions
 
 def cluster_neighbouring_positions(aln_intron_positions, OG_dict, nt_shifts, aa_shifts):
@@ -469,7 +472,7 @@ threshold_percentage_genes = args.p # Intron has to be present in at least this 
 threshold_percentage_species = args.t # Intron has to be present in at least this many species
 threshold_species = args.n # Intron has to be present in at least X Opimoda (~unikont) and X Diphoda (~bikont) species
 
-info = f'Intron maper v1.0\nDeveloped by Sjoerd Gremmen, Michelle Schinkel and Julian Vosseberg.\nTime: {time.asctime()}\nCommand: {" ".join(sys.argv)}\n\n'
+info = f'Intron mapper v1.0\nDeveloped by Sjoerd Gremmen, Michelle Schinkel and Julian Vosseberg.\nTime: {time.asctime()}\nCommand: {" ".join(sys.argv)}\n\n'
 if inference:
     info += f'For LECA inference:\n-Shifts: {shifts}\n-Gene%: {threshold_percentage_genes}\n-Species%: {threshold_percentage_species}\n-Opimoda/Diphoda: {threshold_species}\n\n'
 sys.stderr.write(info)
@@ -504,7 +507,7 @@ if domain:
     info = f'Intron location information for {len(euk_cds_dict)} / {len(set([seqid for sp in species_seqids_dict.values() for seqid in sp]))} full-length sequences.\n\n'
 else:
     info = f'Intron location information for {len(euk_cds_dict)} / {len(aligned_proteins)} sequences.\n\n'
-sys.stderr.write(info)
+sys.stderr.write('\n' + info)
 log.write(info)
 
 # Step 2: Map intron positions onto the proteins
@@ -547,14 +550,17 @@ with open(f'{output_path}/{prefix}_jalview.sff', 'w') as features_file:
             features_file.write(f'Intron position\t{seqid_OG[seqid]}_{seqid}\t-1\t1\t{lengths[seqid]}\tNA\t\n')
 sys.stderr.write('Done!\n\n')
 
-# Step 3b: Create alignment file containing intron information for Malin
-sys.stderr.write('Adding intron locations to alignment file...\n')
-with open(f'{output_path}/{prefix}.introns.aln', 'w') as introns_aln:
-    for seqid, alignment in aligned_proteins.items():
-        introns = ",".join(seqid_introns.get(seqid, []))
-        introns_aln.write(f'>{seqid_OG[seqid]}_{seqid} /organism={seqid[:4]} {{i {introns} i}}\n')
-        for i in range(0, len(alignment), 60):
-            introns_aln.write(alignment[i:i+60] + '\n')
+# Step 3b: Create separate alignment file for each OG containing intron information for Malin
+sys.stderr.write('Making separate alignment files including intron locations...\n')
+for og, seqids in OG_dict.items():
+    with open(f'{output_path}/{prefix}.{og}.introns.aln', 'w') as introns_aln:
+        #for seqid, alignment in aligned_proteins.items():
+        for seqid in seqids:
+            alignment = aligned_proteins[seqid]
+            introns = ",".join(seqid_introns.get(seqid, []))
+            introns_aln.write(f'>{seqid_OG[seqid]}_{seqid} /organism={seqid[:4]} {{i {introns} i}}\n')
+            for i in range(0, len(alignment), 60):
+                introns_aln.write(alignment[i:i+60] + '\n')
 sys.stderr.write('Done!\n\n')
 
 # Step 4: Map intron positions onto the alignment
