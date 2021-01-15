@@ -232,6 +232,9 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
                 CDSs.reverse()
         try:
             start_phase = int(CDSs[0][3])
+            if seqid[:4] in ('CVAR', 'MCIR', 'PBLA', 'FCYL'):
+                if directions == {'-'}:
+                    start_phase = int(CDSs[-1][3])
         except ValueError:
             sys.stderr.write(f'Warning: no start phase detected for {seqid}. Excluded from analysis.\n')
             continue
