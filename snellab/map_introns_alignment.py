@@ -213,7 +213,7 @@ Returns a dictionary with for each sequence ID all exons with their start and st
         #sys.stderr.write('Done!\n')
     return seqid_coordinates
 
-def map_introns_aa(euk_cds_dict, lengths, domainid_coord = None, seqid_domainids = None):
+def map_introns_aa(euk_cds_dict, lengths, domainid_coord = None, seqid_domainids = None, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
     """Calculates the locations of the introns in the amino acids upon performing some checks.
 Returns a dictionary with per sequence ID the phases and amino acid positions of the introns."""
     location_introns = {}
@@ -434,7 +434,7 @@ Returns a dictionary with for each pair of OGs the number of shared introns."""
 parser = argparse.ArgumentParser(description = "This script maps intron positions onto a protein alignment.")
 parser.add_argument("alignment", help = 'protein alignment in fasta format')
 parser.add_argument('-o', metavar = 'outdir', help = 'directory for output files (default: current)')
-parser.add_argument('-e', metavar = 'eukarya_path', help = 'directory containing the Eukarya database (default: ~julian/julian2/snel-clan-genomes/eukarya)')
+parser.add_argument('-e', metavar = 'eukarya_path', help = 'directory containing the Eukarya database (default: ~julian/julian2/snel-clan-genomes/eukarya_new)')
 parser.add_argument('-i', help = 'infer LECA introns and introns predating duplications (default: off)', action = 'store_true')
 parser.add_argument('-s', metavar = 'shifts', help = 'number of nucleotide shifts allowed for an intron (default: 0)', type = int, default = 0)
 parser.add_argument("-p", metavar = 'gene%', help = "percentage of genes in which an intron at least has to occur to call it a LECA intron (default: 7.5)", default = 7.5)
@@ -456,7 +456,7 @@ else:
 if args.e:
     euk_path = args.e
 else:
-    euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya'
+    euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'
 inference = False
 if args.i:
     inference = True
@@ -502,7 +502,7 @@ log.write(info)
 
 # Get CDS coordinates
 sys.stderr.write('Obtaining CDS coordinates...\n')
-euk_cds_dict = get_coordinates(species_seqids_dict)
+euk_cds_dict = get_coordinates(species_seqids_dict, euk_path)
 if domain:
     info = f'Intron location information for {len(euk_cds_dict)} / {len(set([seqid for sp in species_seqids_dict.values() for seqid in sp]))} full-length sequences.\n\n'
 else:
@@ -513,7 +513,7 @@ log.write(info)
 # Step 2: Map intron positions onto the proteins
 sys.stderr.write('Mapping intron positions onto the proteins...\n')
 if domain:
-    location_introns = map_introns_aa(euk_cds_dict, None, domainid_coord, seqid_domainids)
+    location_introns = map_introns_aa(euk_cds_dict, None, domainid_coord, seqid_domainids, euk_path)
     extra = 0
     for seqid, domainids in seqid_domainids.items():
         if len(domainids) > 1:
