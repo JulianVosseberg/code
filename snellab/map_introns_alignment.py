@@ -213,10 +213,29 @@ Returns a dictionary with for each sequence ID all exons with their start and st
         #sys.stderr.write('Done!\n')
     return seqid_coordinates
 
+def get_full_lengths(seqids, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
+    "Extract full lengths of proteins in the Eukarya database."
+    seqid_length = {}
+    with open(euk_path + '/data_set/eukarya_proteomes_metadata.tsv') as metadata_file:
+        metadata_file.readline()
+        for line in metadata_file:
+            fields = line.split('\t')
+            seqid = fields[0]
+            if seqid in seqids:
+                seqid_length[seqid] = int(fields[5])
+            if len(seqid_length) == len(seqids):
+                break
+        else:
+            not_found = set(seqids).difference(set(seqid_length.keys()))
+            sys.stderr.write(f'\nWarning: the sequence IDs {",".join(not_found)} not found in the metadata file.\n')
+    return seqid_length
+
 def map_introns_aa(euk_cds_dict, lengths, domainid_coord = None, seqid_domainids = None, euk_path = '/home/julian/julian2/snel-clan-genomes/eukarya_new'):
     """Calculates the locations of the introns in the amino acids upon performing some checks.
 Returns a dictionary with per sequence ID the phases and amino acid positions of the introns."""
     location_introns = {}
+    if domainid_coord:
+        seqid_length = get_full_lengths(euk_cds_dict.keys(), euk_path)
     for seqid, CDSs in euk_cds_dict.items():
         # Check if all coding parts of one gene lie in the same direction
         directions = set([cds[-2] for cds in CDSs])
@@ -271,9 +290,16 @@ Returns a dictionary with per sequence ID the phases and amino acid positions of
         if length_without_introns%3 != 0:
             sys.stderr.write(f"Warning: {seqid} seems to be incorrectly annotated.\n") #A small check if the genes are correctly annotated
         if domainid_coord is None:
-            if not (length_without_introns // 3 == lengths[seqid] or length_without_introns // 3 == lengths[seqid] + 1):
+            database_length = lengths[seqid]
+            if not (length_without_introns // 3 == lengths[seqid] or length_without_introns // 3 == lengths[seqid] + 1): # Stop codon can be included in CDS
                 sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {lengths[seqid]} (aln). Excluded from analysis.\n')
                 del location_introns[seqid]
+        else:
+            database_length = seqid_length[seqid]
+            if not (length_without_introns // 3 == database_length or length_without_introns // 3 == database_length + 1): # Stop codon can be included in CDS
+                sys.stderr.write(f'Warning: different lengths for {seqid}: {length_without_introns // 3} (gff) | {database_length} (metadata). Excluded from analysis.\n')
+                for domainid in domainids:
+                    del location_introns[domainid]
     return location_introns
 
 def count_groups(seqids, supergroups, unique = True):
