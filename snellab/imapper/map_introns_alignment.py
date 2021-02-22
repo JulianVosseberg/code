@@ -4,6 +4,7 @@
 
 # Load modules
 import sys
+sys.path.append('/home/julian/julian2/scripts/github/snellab/')
 import os
 import argparse
 import gzip
