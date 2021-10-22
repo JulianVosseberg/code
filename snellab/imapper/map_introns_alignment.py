@@ -197,8 +197,6 @@ Returns a dictionary with for each sequence ID all exons with their start and st
                         original_id = original_id[:original_id.find('.')]
                     elif species in ('SFAL', 'ACOE', 'VCAR'):
                         original_id = original_id[:original_id.find('.v')]
-                    elif species == 'NGAD':
-                        original_id = original_id[:original_id.find(' ')]
                     elif species in ('OVOL', 'PPAC', 'SRAT', 'GSAL', 'SBAT', 'SMAN', 'EMUL', 'TASI', 'SMED'):
                         original_id = original_id[original_id.find(':') + 1:]
                     if original_id in original_ids:
