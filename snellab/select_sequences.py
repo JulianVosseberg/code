@@ -23,9 +23,6 @@ elif args.l:
 if len(queries) == 0:
     sys.exit("Error: no queries found.")
 
-if args.m == "remove":
-    sys.exit("Sorry, remove mode not implemented yet...")
-
 with open(args.fasta, 'r') as fasta_file:
     if args.m == "extract":
         to_include = False
@@ -52,12 +49,29 @@ with open(args.fasta, 'r') as fasta_file:
                 if to_include:
                     print(line)
     else:
-        to_include = True
+        sequences_dict = {}
         for line in fasta_file:
-            line = line.rstrip()
             if line[0] == '>':
-                for query in queries:
-                    pass
+                seqid = line[1:].rstrip()
+                if seqid in sequences_dict:
+                    sys.exit(f'Error: multiple headers with the same name ({seqid}). Make all sequence IDs unique.')
+                sequences_dict[seqid] = ''
             else:
-                if to_include:
-                    print(line)
+                sequences_dict[seqid] += line
+        for seqid, sequence in sequences_dict.items():
+            to_include = True
+            if args.f:
+                if seqid in queries:
+                    to_include = False
+                    if args.t:
+                        query = seqid
+            else:
+                for query in queries:
+                    if seqid.startswith(query):
+                        to_include = False
+                        break
+            if to_include:
+                print(f'>{seqid}\n{sequence}', end = '')
+            else:
+                if args.t:
+                    queries.remove(query)
