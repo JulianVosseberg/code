@@ -23,6 +23,8 @@ elif args.l:
 if len(queries) == 0:
     sys.exit("Error: no queries found.")
 
+found = []
+
 with open(args.fasta, 'r') as fasta_file:
     if args.m == "extract":
         to_include = False
@@ -42,6 +44,7 @@ with open(args.fasta, 'r') as fasta_file:
                             to_include = True
                     if to_include:
                         print(line)
+                        found.append(query)
                         if args.t:
                             queries.remove(query)
                         break
@@ -73,5 +76,12 @@ with open(args.fasta, 'r') as fasta_file:
             if to_include:
                 print(f'>{seqid}\n{sequence}', end = '')
             else:
+                found.append(query)
                 if args.t:
                     queries.remove(query)
+if args.t and len(queries) > 0:
+    sys.stderr.write(f'Warning: the following queries were not found: {",".join(queries)}\n')
+elif not args.t:
+    not_found = set(queries).difference(set(found))
+    if len(not_found) > 0:
+        sys.stderr.write(f'Warning: the following queries were not found: {",".join(not_found)}\n')
