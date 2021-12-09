@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 
 import sys
 
@@ -96,13 +96,13 @@ for seq, hits in seq_pfam.items():
         if hit[-1] == 'c':
             hit_info = seq + " c(" + str(start) + ".." + str(stop) + ")" # put 'c' before brackets to indicate merge with next hits wished
         else:
-            hit_info = seq + " (" + str(start) + ".." + str(stop) + ")" 
+            hit_info = seq + " (" + str(start) + ".." + str(stop) + ")"
         try:
             pfam_seqs[pfam].append(hit_info)
         except KeyError:
             pfam_seqs[pfam] = [hit_info]
 
-output_file = open(output_file, "w")         
+output_file = open(output_file, "w")
 for pfam in pfam_seqs:
     output_file.write(pfam + "\t" + "\t".join(pfam_seqs[pfam]) + "\n")
 output_file.close()

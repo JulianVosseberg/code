@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python2
 
 import sys
 import getopt
@@ -29,7 +29,7 @@ for line in fastafile:
         line = line.rstrip()
         seqid = line[1:]
         if delim != '':
-            m = re.search(delim, seqid) 
+            m = re.search(delim, seqid)
             if m:
                 seqid = line[1 : m.start() + 1]
         if seqid not in seqids:
@@ -49,7 +49,7 @@ for line in fastafile:
         seqid = line[1:]
         seqid_full = seqid
         if delim != '':
-            m = re.search(delim, seqid) 
+            m = re.search(delim, seqid)
             if m:
                 seqid = line[1 : m.start() + 1]
                 seqid_full = line[1:]

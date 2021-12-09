@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import sys
 
 def usage():
-	print "Usage: count_supergroups.py <supergroups.tsv> <species_abbreviation1> <species_abbreviation2>..."
-	print "Provide a supergroups file in the format ABBREVIATION\\tSUPERGROUP and a list with the species abbreviations"
+	print("Usage: count_supergroups.py <supergroups.tsv> <species_abbreviation1> <species_abbreviation2>...")
+	print("Provide a supergroups file in the format ABBREVIATION\\tSUPERGROUP and a list with the species abbreviations")
 
 if len(sys.argv) < 3:
 	usage(); sys.exit()
@@ -12,7 +12,7 @@ if len(sys.argv) < 3:
 try:
 	supergroups_file = open(sys.argv[1])
 except IOError:
-	print sys.argv[1], "cannot be opened"; sys.exit()
+	sys.exit(sys.argv[1] + " cannot be opened")
 
 supergroups = {}
 species_list = sys.argv[2:]
@@ -30,7 +30,7 @@ supergroups_file.close()
 counter = 0
 for species in species_list:
 	if species not in supergroups:
-		print species, "could not be found in the supergroups file and not taken into account"
+		print(species, "could not be found in the supergroups file and not taken into account")
 	else:
 		counter += 1
 		supergroup = supergroups[species]
@@ -40,5 +40,5 @@ for species in species_list:
 			supergroups_counter[supergroup] += 1
 
 for supergroup in supergroups_counter:
-	print supergroup + ":",  supergroups_counter[supergroup]
-print "Total:", counter
+	print(supergroup + ":",  supergroups_counter[supergroup])
+print("Total:", counter)
