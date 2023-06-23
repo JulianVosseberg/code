@@ -20,7 +20,7 @@ if args.q:
 elif args.l:
     with open(args.l, 'r') as query_list:
         queries = query_list.read().rstrip().split('\n')
-if len(queries) == 0:
+if len(queries) == 0 or queries == ['']:
     sys.exit("Error: no queries found.")
 
 found = []
