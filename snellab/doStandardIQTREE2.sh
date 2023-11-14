@@ -102,7 +102,7 @@ fi
 if $finder; then
     if ! $mset; then
 	echo "Performing ModelFinder..."
-	iqtree2 -s $aln -m MF --prefix ${prefix}_MF -T $threads $msub $madd --quiet
+	iqtree -s $aln -m MF --prefix ${prefix}_MF -T $threads $msub $madd --quiet
 	model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF.iqtree | sed 's/Best-fit model according to BIC: //')
 	if [ "$model" = "" ]; then
 	    echo "Error: Best-fit model not detected"
@@ -111,7 +111,7 @@ if $finder; then
 	echo -e "Best-fit model is $model\n"
     else
 	echo "Performing ModelFinder to search for the best-fit $se_model model..."
-	iqtree2 -s $aln -m MF --prefix ${prefix}_MF -T $threads --mset $se_model $madd --quiet
+	iqtree -s $aln -m MF --prefix ${prefix}_MF -T $threads --mset $se_model $madd --quiet
 	model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF.iqtree | sed 's/Best-fit model according to BIC: //')
 	if [ "$model" = "" ]; then
 	    echo "Error: Best-fit model not detected"
@@ -133,7 +133,7 @@ if $finder; then
 	    else
 		echo "Performing ModelFinder to search for the best-fit $model model..."
 	    fi
-	    iqtree2 -s $aln --prefix ${prefix}_MF_$model --mset $model -T $threads -m MF $mtree --quiet
+	    iqtree -s $aln --prefix ${prefix}_MF_$model --mset $model -T $threads -m MF $mtree --quiet
 	    model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_$model.iqtree | sed 's/Best-fit model according to BIC: //')
        elif $advanced; then
 	   echo "Performing advanced search for the optimal model of rate heterogeneity across sites..."
@@ -141,7 +141,7 @@ if $finder; then
 	       echo "No RHAS search possible for $model!"
 	   else
 	       se_model=${model%%+*}
-	       iqtree2 -s $aln --prefix ${prefix}_MF_$se_model --mset $se_model -T $threads -m MF $mtree --quiet
+	       iqtree -s $aln --prefix ${prefix}_MF_$se_model --mset $se_model -T $threads -m MF $mtree --quiet
 	       model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_$se_model.iqtree | sed 's/Best-fit model according to BIC: //')
 	   fi
        fi
@@ -152,7 +152,7 @@ if $finder; then
        if [[ "$model" = *"+R10" ]]; then
 	  se_model=${model%%+*}
 	  echo "Best-fit model includes the R10 model of RHAS, also checking $se_model models with higher R values..."
-	  iqtree2 -s $aln --prefix ${prefix}_MF_${se_model}_R8-20 --mset $se_model -T $threads -m MF $mtree -cmin 8 -cmax 20 --quiet
+	  iqtree -s $aln --prefix ${prefix}_MF_${se_model}_R8-20 --mset $se_model -T $threads -m MF $mtree -cmin 8 -cmax 20 --quiet
 	  model=$(grep '^Best-fit model according to BIC:' ${prefix}_MF_${se_model}_R8-20.iqtree | sed 's/Best-fit model according to BIC: //')
 	  if [ "$model" = "" ]; then
 	    echo "Error: Best-fit model not detected"; exit
@@ -166,10 +166,10 @@ fi
 if $tree; then
     if $fast; then
 	echo "Inferring fast tree with $model model..."
-	iqtree2 -s $aln -m $model --prefix $prefix -T $threads --alrt 1000 --quiet --fast
+	iqtree -s $aln -m $model --prefix $prefix -T $threads --alrt 1000 --quiet --fast
     else
 	echo "Inferring tree with $model model..."
-	iqtree2 -s $aln -m $model --prefix $prefix -T $threads --alrt 1000 -B 1000 --wbtl --quiet
+	iqtree -s $aln -m $model --prefix $prefix -T $threads --alrt 1000 -B 1000 --wbtl --quiet
     fi
     echo "Done!"
 fi
