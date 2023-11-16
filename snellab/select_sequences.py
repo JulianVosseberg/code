@@ -30,7 +30,7 @@ with open(args.fasta, 'r') as fasta_file:
         to_include = False
         for line in fasta_file:
             line = line.rstrip()
-            if line[0] == '>':
+            if line.startswith('>'):
                 if to_include:
                     to_include = False
                     if args.t and len(queries) == 0:
@@ -54,7 +54,7 @@ with open(args.fasta, 'r') as fasta_file:
     else:
         sequences_dict = {}
         for line in fasta_file:
-            if line[0] == '>':
+            if line.startswith('>'):
                 seqid = line[1:].rstrip()
                 if seqid in sequences_dict:
                     sys.exit(f'Error: multiple headers with the same name ({seqid}). Make all sequence IDs unique.')
