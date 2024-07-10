@@ -43,8 +43,15 @@ elif ncol_to_plot == 10:
     nrows = 5
     ncols = 2
     figsize = (12, 10)
+elif ncol_to_plot == 6:
+    nrows = 3
+    ncols = 2
+    figsize = (12, 6)
 else:
     sys.exit("Error: add a new way to plot this number of parameters!")
+iter_colname = '#cycle'
+if 'iter' in tracedf.columns:
+    iter_colname = 'iter'
 fig, axs = plt.subplots(nrows, ncols, figsize = figsize)
 k = 0
 for i in range(nrows):
@@ -54,7 +61,7 @@ for i in range(nrows):
         if k == 0:
             legend = 'full'
         sns.lineplot(data = tracedf,
-                     x = '#cycle',
+                     x = iter_colname,
                      y = column,
                      hue = 'chain',
                      legend = legend,
